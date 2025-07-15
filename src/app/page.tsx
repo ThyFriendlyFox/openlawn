@@ -38,11 +38,11 @@ export default function LawnRoutePage() {
   return (
     <div className="flex flex-col h-svh bg-background text-foreground font-body">
       <Header />
-      <main className="flex flex-col flex-grow overflow-hidden">
-        <div className="h-1/2">
+      <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
+        <div className="md:col-span-2 h-full w-full">
             <RouteMap customers={customers} selectedCustomer={selectedCustomer} onSelectCustomer={handleSelectCustomer}/>
         </div>
-        <div className="flex-grow overflow-y-auto">
+        <div className="md:col-span-1 flex-grow overflow-y-auto">
             <CustomerList
               customers={customers}
               onSelectCustomer={handleSelectCustomer}
@@ -69,5 +69,5 @@ export default function LawnRoutePage() {
         onAddCustomer={handleAddCustomer}
       />
     </div>
-  )
+  );
 }

@@ -7,3 +7,13 @@ export type Customer = {
   notes: string;
   serviceRequested: string;
 };
+
+export type Route = {
+  stops: {
+    customerId: string;
+    customerName: string;
+    address: string;
+  }[];
+  totalDistance: string;
+  totalDuration: string;
+};

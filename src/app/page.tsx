@@ -5,10 +5,10 @@ import type { Customer } from "@/lib/types"
 import { mockCustomers } from "@/lib/data"
 
 import { Header } from "@/components/lawn-route/Header"
-import { MapPlaceholder } from "@/components/lawn-route/MapPlaceholder"
 import { CustomerList } from "@/components/lawn-route/CustomerList"
 import { CustomerDetailsSheet } from "@/components/lawn-route/CustomerDetailsSheet"
 import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
+import { RouteMap } from "@/components/lawn-route/RouteMap"
 
 export default function LawnRoutePage() {
   const [customers, setCustomers] = React.useState<Customer[]>(mockCustomers)
@@ -40,7 +40,7 @@ export default function LawnRoutePage() {
       <Header />
       <main className="flex flex-col flex-grow overflow-hidden">
         <div className="h-1/2">
-            <MapPlaceholder customers={customers} />
+            <RouteMap customers={customers} selectedCustomer={selectedCustomer} onSelectCustomer={handleSelectCustomer}/>
         </div>
         <div className="flex-grow overflow-y-auto">
             <CustomerList

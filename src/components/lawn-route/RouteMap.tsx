@@ -46,10 +46,14 @@ const mapOptions = {
   ],
 }
 
+// Define libraries outside of the component to prevent re-renders
+const libraries: ('directions')[] = ['directions'];
+
 export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: RouteMapProps) {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    libraries,
   })
 
   const [directionsResponse, setDirectionsResponse] =
@@ -58,7 +62,7 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: Rout
   const mapRef = React.useRef<google.maps.Map | null>(null)
 
   React.useEffect(() => {
-    if (customers.length < 2) {
+    if (!isLoaded || customers.length < 2) {
       setDirectionsResponse(null)
       return
     }
@@ -90,7 +94,7 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: Rout
         }
       }
     )
-  }, [customers])
+  }, [customers, isLoaded])
 
   React.useEffect(() => {
     if (mapRef.current && customers.length > 0) {

@@ -7,7 +7,7 @@ interface MapPlaceholderProps {
 
 export function MapPlaceholder({ customers }: MapPlaceholderProps) {
   return (
-    <div className="flex-grow bg-gray-200 relative w-full h-1/2 md:h-auto">
+    <div className="flex-grow bg-gray-200 relative w-full h-full">
       <Image
         src="https://placehold.co/1200x800.png"
         alt="Map of the day's route"

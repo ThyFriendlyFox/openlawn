@@ -6,7 +6,7 @@ import { mockCustomers } from "@/lib/data"
 
 import { Header } from "@/components/lawn-route/Header"
 import { MapPlaceholder } from "@/components/lawn-route/MapPlaceholder"
-import { CustomerCarousel } from "@/components/lawn-route/CustomerCarousel"
+import { CustomerList } from "@/components/lawn-route/CustomerList"
 import { CustomerDetailsSheet } from "@/components/lawn-route/CustomerDetailsSheet"
 import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
 
@@ -39,12 +39,16 @@ export default function LawnRoutePage() {
     <div className="flex flex-col h-svh bg-background text-foreground font-body">
       <Header />
       <main className="flex flex-col flex-grow overflow-hidden">
-        <MapPlaceholder customers={customers} />
-        <CustomerCarousel
-          customers={customers}
-          onSelectCustomer={handleSelectCustomer}
-          onAddCustomer={handleOpenAddSheet}
-        />
+        <div className="h-1/2">
+            <MapPlaceholder customers={customers} />
+        </div>
+        <div className="flex-grow overflow-y-auto">
+            <CustomerList
+              customers={customers}
+              onSelectCustomer={handleSelectCustomer}
+              onAddCustomer={handleOpenAddSheet}
+            />
+        </div>
       </main>
 
       {selectedCustomer && (

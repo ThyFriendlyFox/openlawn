@@ -40,7 +40,12 @@ export default function LawnRoutePage() {
       <Header />
       <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
         <div className="md:col-span-2 h-full w-full">
-            <RouteMap customers={customers} selectedCustomer={selectedCustomer} onSelectCustomer={handleSelectCustomer}/>
+            <RouteMap 
+              customers={customers} 
+              selectedCustomer={selectedCustomer} 
+              onSelectCustomer={handleSelectCustomer}
+              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}
+            />
         </div>
         <div className="md:col-span-1 flex-grow overflow-y-auto">
             <CustomerList

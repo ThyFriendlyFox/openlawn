@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -29,7 +30,7 @@ import { useToast } from "@/hooks/use-toast"
 interface AddCustomerSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAddCustomer: (data: z.infer<typeof formSchema>) => void
+  onAddCustomer: (data: z.infer<typeof formSchema>) => Promise<void>
 }
 
 const formSchema = z.object({
@@ -41,6 +42,7 @@ const formSchema = z.object({
 
 export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCustomerSheetProps) {
   const { toast } = useToast()
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -52,13 +54,24 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
     },
   })
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    onAddCustomer(values)
-    toast({
-      title: "Customer Added",
-      description: `${values.name} has been added to your customer list.`,
-    })
-    form.reset()
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true)
+    try {
+      await onAddCustomer(values)
+      toast({
+        title: "Customer Added",
+        description: `${values.name} has been added to your customer list.`,
+      })
+      form.reset()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add customer. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -130,7 +143,9 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
               <SheetClose asChild>
                   <Button type="button" variant="ghost">Cancel</Button>
               </SheetClose>
-              <Button type="submit" className="bg-primary hover:bg-primary/90">Save Customer</Button>
+              <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitting}>
+                {isSubmitting ? "Adding Customer..." : "Save Customer"}
+              </Button>
             </SheetFooter>
           </form>
         </Form>

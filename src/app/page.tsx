@@ -25,16 +25,46 @@ export default function LawnRoutePage() {
     setAddSheetOpen(true)
   }
   
-  const handleAddCustomer = (newCustomerData: Omit<Customer, 'id' | 'lat' | 'lng'>) => {
-    const newCustomer: Customer = {
-      ...newCustomerData,
-      id: `C${(customers.length + 1).toString().padStart(3, '0')}`,
-      // Geocoding would be needed for a real app. We'll use random coordinates in Florida for now.
-      lat: 27.6648 + (Math.random() - 0.5) * 2, // Florida center ± 1 degree
-      lng: -81.5158 + (Math.random() - 0.5) * 2, // Florida center ± 1 degree
+  const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'lat' | 'lng'>) => {
+    try {
+      // Use Google Maps Geocoding API to get real coordinates from the address
+      const geocoder = new google.maps.Geocoder();
+      const result = await geocoder.geocode({ address: newCustomerData.address });
+      
+      if (result.results.length > 0) {
+        const location = result.results[0].geometry.location;
+        const newCustomer: Customer = {
+          ...newCustomerData,
+          id: `C${(customers.length + 1).toString().padStart(3, '0')}`,
+          lat: location.lat(),
+          lng: location.lng(),
+        }
+        setCustomers(prev => [...prev, newCustomer])
+        setAddSheetOpen(false)
+      } else {
+        // Fallback to Florida coordinates if geocoding fails
+        console.warn('Geocoding failed, using fallback coordinates')
+        const newCustomer: Customer = {
+          ...newCustomerData,
+          id: `C${(customers.length + 1).toString().padStart(3, '0')}`,
+          lat: 27.6648 + (Math.random() - 0.5) * 2,
+          lng: -81.5158 + (Math.random() - 0.5) * 2,
+        }
+        setCustomers(prev => [...prev, newCustomer])
+        setAddSheetOpen(false)
+      }
+    } catch (error) {
+      console.error('Error geocoding address:', error)
+      // Fallback to Florida coordinates if geocoding fails
+      const newCustomer: Customer = {
+        ...newCustomerData,
+        id: `C${(customers.length + 1).toString().padStart(3, '0')}`,
+        lat: 27.6648 + (Math.random() - 0.5) * 2,
+        lng: -81.5158 + (Math.random() - 0.5) * 2,
+      }
+      setCustomers(prev => [...prev, newCustomer])
+      setAddSheetOpen(false)
     }
-    setCustomers(prev => [...prev, newCustomer])
-    setAddSheetOpen(false)
   }
 
   return (

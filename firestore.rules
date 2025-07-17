@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to get user role
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Helper function to check if user has required role
+    function hasRole(requiredRole) {
+      let userRole = getUserRole();
+      let roleHierarchy = {
+        'admin': 3,
+        'manager': 2,
+        'employee': 1
+      };
+      return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
+    }
+    
+    // Users collection - users can read their own data, admins can read all
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || hasRole('admin'));
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (request.auth.uid == userId || hasRole('admin'));
+      allow delete: if isAuthenticated() && hasRole('admin');
+    }
+    
+    // Customers collection - all authenticated users can read, managers+ can write
+    match /customers/{customerId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasRole('manager');
+      allow delete: if isAuthenticated() && hasRole('admin');
+    }
+    
+    // Routes collection - all authenticated users can read, managers+ can write
+    match /routes/{routeId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasRole('manager');
+      allow delete: if isAuthenticated() && hasRole('admin');
+    }
+    
+    // Services collection - all authenticated users can read, managers+ can write
+    match /services/{serviceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasRole('manager');
+      allow delete: if isAuthenticated() && hasRole('admin');
+    }
+    
+    // Companies collection - admins can manage companies
+    match /companies/{companyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && hasRole('admin');
+    }
+    
+    // Crews collection - managers+ can manage crews
+    match /crews/{crewId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasRole('manager');
+      allow delete: if isAuthenticated() && hasRole('admin');
+    }
+    
+    // Billing collection - managers+ can access billing
+    match /billing/{billingId} {
+      allow read: if isAuthenticated() && hasRole('manager');
+      allow write: if isAuthenticated() && hasRole('manager');
+    }
+    
+    // Settings collection - admins can manage app settings
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && hasRole('admin');
+    }
+  }
+} 

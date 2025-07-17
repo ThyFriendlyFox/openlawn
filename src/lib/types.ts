@@ -17,3 +17,11 @@ export type Route = {
   totalDistance: string;
   totalDuration: string;
 };
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  role: 'admin' | 'manager' | 'employee';
+};

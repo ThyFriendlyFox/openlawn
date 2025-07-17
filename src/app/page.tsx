@@ -29,9 +29,9 @@ export default function LawnRoutePage() {
     const newCustomer: Customer = {
       ...newCustomerData,
       id: `C${(customers.length + 1).toString().padStart(3, '0')}`,
-      // Geocoding would be needed for a real app. We'll use random coordinates for now.
-      lat: 40.7128 + (Math.random() - 0.5) * 0.1, 
-      lng: -74.0060 + (Math.random() - 0.5) * 0.1,
+      // Geocoding would be needed for a real app. We'll use random coordinates in Florida for now.
+      lat: 27.6648 + (Math.random() - 0.5) * 2, // Florida center ± 1 degree
+      lng: -81.5158 + (Math.random() - 0.5) * 2, // Florida center ± 1 degree
     }
     setCustomers(prev => [...prev, newCustomer])
     setAddSheetOpen(false)

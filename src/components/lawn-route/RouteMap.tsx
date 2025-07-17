@@ -8,7 +8,7 @@ import {
   DirectionsRenderer,
 } from '@react-google-maps/api'
 import type { Customer } from '@/lib/types'
-import { Loader2 } from 'lucide-react'
+import { Loader2, AlertTriangle } from 'lucide-react'
 
 interface RouteMapProps {
   customers: Customer[]
@@ -46,13 +46,22 @@ const mapOptions = {
   ],
 }
 
-// Define libraries outside of the component to prevent re-renders
 const libraries: ('directions')[] = ['directions'];
 
 export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: RouteMapProps) {
-  const { isLoaded } = useJsApiLoader({
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+  
+  React.useEffect(() => {
+    if (!apiKey) {
+      console.error("Google Maps API key is missing. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env file.");
+    } else {
+      console.log("Using Google Maps API Key:", apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4));
+    }
+  }, [apiKey]);
+
+  const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    googleMapsApiKey: apiKey,
     libraries,
   })
 
@@ -90,7 +99,7 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: Rout
         if (status === google.maps.DirectionsStatus.OK && result) {
           setDirectionsResponse(result)
         } else {
-          console.error(`error fetching directions ${result}`)
+          console.error(`Error fetching directions: ${status}`, result)
         }
       }
     )
@@ -106,6 +115,23 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: Rout
     }
   }, [customers, directionsResponse]);
 
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col h-full w-full items-center justify-center bg-destructive/10 text-destructive p-4">
+        <AlertTriangle className="h-12 w-12 mb-4" />
+        <h2 className="text-lg font-semibold">Error Loading Map</h2>
+        <p className="text-center text-sm">Could not load Google Maps. Please check the following:</p>
+        <ul className="list-disc list-inside text-sm mt-2 text-left">
+          <li>The API key in your <strong>.env</strong> file is correct.</li>
+          <li>The <strong>Maps JavaScript API</strong> & <strong>Directions API</strong> are enabled.</li>
+          <li>Billing is enabled for your Google Cloud project.</li>
+          <li>There are no restrictive API key restrictions.</li>
+        </ul>
+        <p className="mt-4 text-xs text-destructive/80">Error: {loadError.message}</p>
+      </div>
+    )
+  }
 
   if (!isLoaded) {
     return (

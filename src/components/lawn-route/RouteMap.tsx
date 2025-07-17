@@ -46,7 +46,7 @@ const mapOptions = {
   ],
 }
 
-const libraries = ['directions'] as ('directions')[];
+const libraries: ('directions')[] = ['directions'];
 
 export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: RouteMapProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";

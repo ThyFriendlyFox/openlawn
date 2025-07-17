@@ -14,6 +14,7 @@ interface RouteMapProps {
   customers: Customer[]
   selectedCustomer: Customer | null
   onSelectCustomer: (customer: Customer) => void
+  apiKey?: string;
 }
 
 const containerStyle = {
@@ -48,8 +49,7 @@ const mapOptions = {
 
 const libraries: ('directions')[] = ['directions'];
 
-export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: RouteMapProps) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+export function RouteMap({ customers, selectedCustomer, onSelectCustomer, apiKey }: RouteMapProps) {
   
   React.useEffect(() => {
     if (!apiKey) {
@@ -61,7 +61,7 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: Rout
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: apiKey,
+    googleMapsApiKey: apiKey || "",
     libraries,
   })
 
@@ -71,8 +71,17 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: Rout
   const mapRef = React.useRef<google.maps.Map | null>(null)
 
   React.useEffect(() => {
-    if (!isLoaded || customers.length < 2) {
+    if (!isLoaded) return
+
+    if (customers.length < 2) {
       setDirectionsResponse(null)
+      if (mapRef.current && customers.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        customers.forEach(({ lat, lng }) => {
+            bounds.extend(new google.maps.LatLng(lat, lng));
+        });
+        mapRef.current.fitBounds(bounds, 100);
+      }
       return
     }
 
@@ -98,23 +107,16 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: Rout
       (result, status) => {
         if (status === google.maps.DirectionsStatus.OK && result) {
           setDirectionsResponse(result)
+          if (mapRef.current) {
+            const bounds = result.routes[0].bounds;
+            mapRef.current.fitBounds(bounds, 60);
+          }
         } else {
           console.error(`Error fetching directions: ${status}`, result)
         }
       }
     )
   }, [customers, isLoaded])
-
-  React.useEffect(() => {
-    if (mapRef.current && customers.length > 0) {
-        const bounds = new google.maps.LatLngBounds();
-        customers.forEach(({ lat, lng }) => {
-            bounds.extend(new google.maps.LatLng(lat, lng));
-        });
-        mapRef.current.fitBounds(bounds, 100);
-    }
-  }, [customers, directionsResponse]);
-
 
   if (loadError) {
     return (

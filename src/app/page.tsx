@@ -44,7 +44,6 @@ export default function LawnRoutePage() {
               customers={customers} 
               selectedCustomer={selectedCustomer} 
               onSelectCustomer={handleSelectCustomer}
-              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}
             />
         </div>
         <div className="md:col-span-1 flex-grow overflow-y-auto">

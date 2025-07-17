@@ -14,7 +14,6 @@ interface RouteMapProps {
   customers: Customer[]
   selectedCustomer: Customer | null
   onSelectCustomer: (customer: Customer) => void
-  apiKey: string
 }
 
 const containerStyle = {
@@ -50,10 +49,10 @@ const mapOptions = {
 // Define libraries outside of the component to prevent re-renders
 const libraries: ('directions')[] = ['directions'];
 
-export function RouteMap({ customers, selectedCustomer, onSelectCustomer, apiKey }: RouteMapProps) {
+export function RouteMap({ customers, selectedCustomer, onSelectCustomer }: RouteMapProps) {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: apiKey,
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries,
   })
 

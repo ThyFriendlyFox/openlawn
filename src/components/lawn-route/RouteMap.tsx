@@ -47,23 +47,31 @@ const mapOptions = {
   ],
 }
 
-const libraries: ('directions')[] = ['directions'];
+// No libraries needed - Directions API is part of core Maps JavaScript API
 
 export function RouteMap({ customers, selectedCustomer, onSelectCustomer, apiKey }: RouteMapProps) {
   
   React.useEffect(() => {
     if (!apiKey) {
       console.error("Google Maps API key is missing. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env file.");
-    } else {
-      console.log("Using Google Maps API Key:", apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4));
     }
   }, [apiKey]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: apiKey || "",
-    libraries,
   })
+
+  React.useEffect(() => {
+    if (loadError) {
+      console.error("Google Maps Load Error:", loadError);
+      console.error("Error details:", {
+        message: loadError.message,
+        name: loadError.name,
+        stack: loadError.stack
+      });
+    }
+  }, [loadError]);
 
   const [directionsResponse, setDirectionsResponse] =
     React.useState<google.maps.DirectionsResult | null>(null)

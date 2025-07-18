@@ -9,6 +9,7 @@ import { CustomerList } from "@/components/lawn-route/CustomerList"
 import { CustomerDetailsSheet } from "@/components/lawn-route/CustomerDetailsSheet"
 import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
 import { RouteMap } from "@/components/lawn-route/RouteMap"
+import { googleMapsConfig } from "@/lib/env"
 
 export default function LawnRoutePage() {
   const [customers, setCustomers] = React.useState<Customer[]>(mockCustomers)
@@ -25,7 +26,7 @@ export default function LawnRoutePage() {
     setAddSheetOpen(true)
   }
   
-  const handleAddCustomer = async (newCustomerData: Omit<Customer, 'id' | 'lat' | 'lng'>) => {
+  const handleAddCustomer = async (newCustomerData: { name: string; address: string; serviceRequested: string; notes?: string }) => {
     try {
       // Use Google Maps Geocoding API to get real coordinates from the address
       const geocoder = new google.maps.Geocoder();
@@ -38,6 +39,7 @@ export default function LawnRoutePage() {
           id: `C${(customers.length + 1).toString().padStart(3, '0')}`,
           lat: location.lat(),
           lng: location.lng(),
+          notes: newCustomerData.notes || '',
         }
         setCustomers(prev => [...prev, newCustomer])
         setAddSheetOpen(false)
@@ -49,6 +51,7 @@ export default function LawnRoutePage() {
           id: `C${(customers.length + 1).toString().padStart(3, '0')}`,
           lat: 27.6648 + (Math.random() - 0.5) * 2,
           lng: -81.5158 + (Math.random() - 0.5) * 2,
+          notes: newCustomerData.notes || '',
         }
         setCustomers(prev => [...prev, newCustomer])
         setAddSheetOpen(false)
@@ -61,6 +64,7 @@ export default function LawnRoutePage() {
         id: `C${(customers.length + 1).toString().padStart(3, '0')}`,
         lat: 27.6648 + (Math.random() - 0.5) * 2,
         lng: -81.5158 + (Math.random() - 0.5) * 2,
+        notes: newCustomerData.notes || '',
       }
       setCustomers(prev => [...prev, newCustomer])
       setAddSheetOpen(false)
@@ -76,7 +80,7 @@ export default function LawnRoutePage() {
               customers={customers} 
               selectedCustomer={selectedCustomer} 
               onSelectCustomer={handleSelectCustomer}
-              apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+              apiKey={googleMapsConfig.apiKey}
             />
         </div>
         <div className="md:col-span-1 flex-grow overflow-y-auto">

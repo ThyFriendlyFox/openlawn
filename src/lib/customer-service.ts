@@ -56,6 +56,24 @@ const convertFirestoreCustomer = (doc: any): Customer => {
     lng: data.lng,
     notes: data.notes,
     serviceRequested: data.serviceRequested,
+    servicePreferences: data.servicePreferences || {
+      preferredDays: [],
+      preferredTimeRange: { start: '08:00', end: '17:00' },
+      serviceFrequency: 'weekly',
+    },
+    serviceHistory: data.serviceHistory?.map((record: any) => ({
+      id: record.id,
+      date: record.date.toDate(),
+      service: record.service,
+      notes: record.notes,
+      completedBy: record.completedBy,
+      crewId: record.crewId,
+      duration: record.duration,
+      status: record.status,
+    })) || [],
+    status: data.status || 'active',
+    createdAt: data.createdAt?.toDate() || new Date(),
+    updatedAt: data.updatedAt?.toDate() || new Date(),
   };
 };
 

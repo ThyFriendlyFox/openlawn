@@ -1,6 +1,6 @@
 "use client"
 
-import { Leaf, User, LogOut, Shield, Settings } from 'lucide-react';
+import { Leaf, User, LogOut, Shield, Settings, Calendar } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -129,6 +129,10 @@ export function Header() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem className="cursor-pointer">
+                <Calendar className="mr-2 h-4 w-4" />
+                <span>My Schedule</span>
+              </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer">
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile Settings</span>

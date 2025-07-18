@@ -68,6 +68,22 @@ const isMobile = () => {
 
 export const env = isMobile() ? getMobileConfig() : getWebConfig();
 
+// Debug logging in development
+if (process.env.NODE_ENV === 'development') {
+  console.log('Environment Config:', {
+    firebase: {
+      apiKey: env.firebase.apiKey ? 'Present' : 'Missing',
+      projectId: env.firebase.projectId || 'Missing'
+    },
+    googleMaps: {
+      apiKey: env.googleMaps.apiKey ? 'Present' : 'Missing'
+    },
+    googleAI: {
+      apiKey: env.googleAI.apiKey ? 'Present' : 'Missing'
+    }
+  });
+}
+
 // Export individual configs for convenience
 export const firebaseConfig = env.firebase;
 export const googleMapsConfig = env.googleMaps;

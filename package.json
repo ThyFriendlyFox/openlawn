@@ -18,7 +18,11 @@
     "cap:sync": "npx cap sync",
     "cap:open:android": "npx cap open android",
     "cap:open:ios": "npx cap open ios",
-    "setup:env": "node scripts/setup-env.js"
+    "setup:env": "node scripts/setup-env.js",
+    "firebase:deploy": "firebase deploy",
+    "firebase:deploy:rules": "firebase deploy --only firestore:rules",
+    "firebase:emulators": "firebase emulators:start",
+    "firebase:init": "firebase init"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.2",

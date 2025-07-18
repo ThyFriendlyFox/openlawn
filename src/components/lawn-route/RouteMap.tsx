@@ -60,6 +60,7 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer, apiKey
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: apiKey || "",
+    libraries: ['places']
   })
 
   React.useEffect(() => {
@@ -72,6 +73,12 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer, apiKey
       });
     }
   }, [loadError]);
+
+  React.useEffect(() => {
+    console.log("Google Maps API Key:", apiKey ? "Present" : "Missing");
+    console.log("Google Maps Loaded:", isLoaded);
+    console.log("Google Maps Load Error:", loadError);
+  }, [apiKey, isLoaded, loadError]);
 
   const [directionsResponse, setDirectionsResponse] =
     React.useState<google.maps.DirectionsResult | null>(null)

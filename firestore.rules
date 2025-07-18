@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read and write their own user profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow users to read and write their own customers
+    match /customers/{customerId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.createdBy;
+      
+      // Allow creation of new customers
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.createdBy;
+    }
+    
+    // Allow users to read and write their own company settings
+    match /companies/{companyId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid in resource.data.members;
+    }
+    
+    // Allow users to read and write their own routes
+    match /routes/{routeId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.createdBy;
+      
+      // Allow creation of new routes
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.createdBy;
+    }
+    
+    // Allow users to read and write their own services
+    match /services/{serviceId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.createdBy;
+      
+      // Allow creation of new services
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.createdBy;
+    }
+    
+    // Allow users to read and write their own employees
+    match /employees/{employeeId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.createdBy;
+      
+      // Allow creation of new employees
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.createdBy;
+    }
+    
+    // Allow users to read and write their own crews
+    match /crews/{crewId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.createdBy;
+      
+      // Allow creation of new crews
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.createdBy;
+    }
+  }
+} 

@@ -38,11 +38,24 @@ export interface FirestoreCustomer {
   lastServiceDate?: Timestamp;
   nextServiceDate?: Timestamp;
   serviceHistory?: {
+    id: string;
     date: Timestamp;
     service: string;
     notes?: string;
     completedBy?: string;
+    crewId?: string;
+    duration?: number;
+    status: 'completed' | 'in-progress' | 'cancelled' | 'no-show';
   }[];
+  servicePreferences?: {
+    preferredDays: string[];
+    preferredTimeRange: {
+      start: string;
+      end: string;
+    };
+    serviceFrequency: 'weekly' | 'biweekly' | 'monthly' | 'one-time';
+    specialInstructions?: string;
+  };
 }
 
 // Convert Firestore data to Customer type
@@ -86,10 +99,21 @@ const convertToFirestoreCustomer = (customer: Omit<Customer, 'id'>, userId: stri
     lng: customer.lng,
     notes: customer.notes,
     serviceRequested: customer.serviceRequested,
+    servicePreferences: customer.servicePreferences,
+    serviceHistory: customer.serviceHistory?.map(record => ({
+      id: record.id,
+      date: Timestamp.fromDate(record.date),
+      service: record.service,
+      notes: record.notes,
+      completedBy: record.completedBy,
+      crewId: record.crewId,
+      duration: record.duration,
+      status: record.status,
+    })) || [],
+    status: customer.status || 'active',
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
     createdBy: userId,
-    status: 'active',
   };
 };
 

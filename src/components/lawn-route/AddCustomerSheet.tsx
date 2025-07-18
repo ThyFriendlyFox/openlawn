@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
@@ -16,6 +15,11 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Slider } from "@/components/ui/slider"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import {
   Sheet,
   SheetContent,
@@ -26,6 +30,8 @@ import {
   SheetClose
 } from "@/components/ui/sheet"
 import { useToast } from "@/hooks/use-toast"
+import { Calendar, Clock } from "lucide-react"
+import type { DayOfWeek } from "@/lib/types"
 
 interface AddCustomerSheetProps {
   open: boolean
@@ -38,21 +44,72 @@ const formSchema = z.object({
   address: z.string().min(5, { message: "Please enter a valid address." }),
   serviceRequested: z.string().min(3, { message: "Service description is too short."}),
   notes: z.string().optional(),
+  // Service preferences
+  preferredDays: z.array(z.string()).min(1, { message: "Please select at least one preferred day." }),
+  timeRangeStart: z.string(),
+  timeRangeEnd: z.string(),
+  serviceFrequency: z.enum(['weekly', 'biweekly', 'monthly', 'one-time']),
 })
 
 export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCustomerSheetProps) {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [timeRange, setTimeRange] = React.useState([480, 1020]) // 8:00 AM to 5:00 PM in minutes
+
+  // Convert time string (HH:MM) to minutes since midnight
+  const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  // Convert minutes since midnight to time string (HH:MM)
+  const minutesToTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  };
+
+  const DAYS_OF_WEEK: { value: DayOfWeek; label: string; short: string }[] = [
+    { value: 'monday', label: 'Monday', short: 'Mon' },
+    { value: 'tuesday', label: 'Tuesday', short: 'Tue' },
+    { value: 'wednesday', label: 'Wednesday', short: 'Wed' },
+    { value: 'thursday', label: 'Thursday', short: 'Thu' },
+    { value: 'friday', label: 'Friday', short: 'Fri' },
+    { value: 'saturday', label: 'Saturday', short: 'Sat' },
+    { value: 'sunday', label: 'Sunday', short: 'Sun' },
+  ];
+
+  const SERVICE_FREQUENCIES = [
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'biweekly', label: 'Bi-weekly' },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'one-time', label: 'One-time' },
+  ];
 
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       address: "",
       serviceRequested: "",
       notes: "",
+      preferredDays: [],
+      timeRangeStart: "08:00",
+      timeRangeEnd: "17:00",
+      serviceFrequency: "weekly",
     },
   })
+
+  // Sync slider with form values when form is reset
+  React.useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'timeRangeStart' || name === 'timeRangeEnd') {
+        const start = timeToMinutes(value.timeRangeStart || "08:00");
+        const end = timeToMinutes(value.timeRangeEnd || "17:00");
+        setTimeRange([start, end]);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
@@ -138,6 +195,112 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
                   </FormItem>
                 )}
               />
+
+              {/* Service Preferences Section */}
+              <div className="space-y-4 border-t pt-6">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
+                  <h3 className="text-lg font-semibold">Service Preferences</h3>
+                </div>
+
+                {/* Preferred Days */}
+                <FormField
+                  control={form.control}
+                  name="preferredDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Preferred Service Days</FormLabel>
+                      <div className="grid grid-cols-7 gap-4">
+                        {DAYS_OF_WEEK.map((day) => (
+                          <div key={day.value} className="flex flex-col items-center space-y-3">
+                            <Checkbox
+                              id={day.value}
+                              checked={field.value.includes(day.value)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  field.onChange([...field.value, day.value]);
+                                } else {
+                                  field.onChange(field.value.filter((d) => d !== day.value));
+                                }
+                              }}
+                              className="w-8 h-8 border-2 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                            />
+                            <Label 
+                              htmlFor={day.value} 
+                              className="text-base font-semibold cursor-pointer text-center hover:text-primary transition-colors"
+                            >
+                              {day.short}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Time Range Slider */}
+                <FormField
+                  control={form.control}
+                  name="timeRangeStart"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Preferred Time Range
+                      </FormLabel>
+                      <div className="px-2 py-4">
+                        <Slider
+                          value={timeRange}
+                          onValueChange={(values) => {
+                            setTimeRange(values);
+                            // Update form values
+                            field.onChange(minutesToTime(values[0]));
+                            form.setValue('timeRangeEnd', minutesToTime(values[1]));
+                          }}
+                          max={1440} // 24 hours in minutes
+                          min={0}
+                          step={15} // 15-minute intervals
+                          className="w-full"
+                        />
+                        <div className="flex justify-between text-sm text-muted-foreground mt-2">
+                          <span>{minutesToTime(timeRange[0])}</span>
+                          <span>{minutesToTime(timeRange[1])}</span>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Service Frequency */}
+                <FormField
+                  control={form.control}
+                  name="serviceFrequency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Service Frequency</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select frequency" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {SERVICE_FREQUENCIES.map((frequency) => (
+                            <SelectItem key={frequency.value} value={frequency.value}>
+                              {frequency.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+
+              </div>
             </div>
             <SheetFooter>
               <SheetClose asChild>

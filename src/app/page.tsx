@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import type { Customer } from "@/lib/types"
+import type { Customer, DayOfWeek } from "@/lib/types"
 import { mockCustomers } from "@/lib/data"
 import { subscribeToCustomers, addCustomer as addCustomerToFirestore } from "@/lib/customer-service"
 import { useAuth } from "@/hooks/use-auth"
@@ -13,6 +13,7 @@ import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
 import { RouteMap } from "@/components/lawn-route/RouteMap"
 import { googleMapsConfig } from "@/lib/env"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
+
 
 export default function LawnRoutePage() {
   const { user } = useAuth();
@@ -29,6 +30,8 @@ export default function LawnRoutePage() {
   const handleOpenAddSheet = () => {
     setAddSheetOpen(true)
   }
+
+
   
   // Subscribe to customers when user is authenticated
   React.useEffect(() => {
@@ -41,8 +44,36 @@ export default function LawnRoutePage() {
     return () => unsubscribe();
   }, [user]);
 
-  const handleAddCustomer = async (newCustomerData: { name: string; address: string; serviceRequested: string; notes?: string }) => {
+  const handleAddCustomer = async (newCustomerData: { 
+    name: string; 
+    address: string; 
+    serviceRequested: string; 
+    notes?: string;
+    preferredDays: string[];
+    timeRangeStart: string;
+    timeRangeEnd: string;
+    serviceFrequency: 'weekly' | 'biweekly' | 'monthly' | 'one-time';
+  }) => {
     if (!user) return;
+
+    const createCustomerData = (lat: number, lng: number) => ({
+      ...newCustomerData,
+      lat,
+      lng,
+      notes: newCustomerData.notes || '',
+      servicePreferences: {
+        preferredDays: newCustomerData.preferredDays as DayOfWeek[],
+        preferredTimeRange: { 
+          start: newCustomerData.timeRangeStart, 
+          end: newCustomerData.timeRangeEnd 
+        },
+        serviceFrequency: newCustomerData.serviceFrequency,
+      },
+      serviceHistory: [],
+      status: 'active' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     try {
       // Use Google Maps Geocoding API to get real coordinates from the address
@@ -62,24 +93,16 @@ export default function LawnRoutePage() {
         lng = -81.5158 + (Math.random() - 0.5) * 2;
       }
 
-      const customerData = {
-        ...newCustomerData,
-        lat,
-        lng,
-        notes: newCustomerData.notes || '',
-      };
-
+      const customerData = createCustomerData(lat, lng);
       await addCustomerToFirestore(customerData, user.uid);
       setAddSheetOpen(false);
     } catch (error) {
       console.error('Error adding customer:', error)
       // Fallback to Florida coordinates if geocoding fails
-      const customerData = {
-        ...newCustomerData,
-        lat: 27.6648 + (Math.random() - 0.5) * 2,
-        lng: -81.5158 + (Math.random() - 0.5) * 2,
-        notes: newCustomerData.notes || '',
-      };
+      const customerData = createCustomerData(
+        27.6648 + (Math.random() - 0.5) * 2,
+        -81.5158 + (Math.random() - 0.5) * 2
+      );
 
       try {
         await addCustomerToFirestore(customerData, user.uid);

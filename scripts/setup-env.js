@@ -62,6 +62,7 @@ async function createEnvFile() {
   const firebaseStorageBucket = await askQuestion('Firebase Storage Bucket (e.g., your-project.appspot.com): ');
   const firebaseMessagingSenderId = await askQuestion('Firebase Messaging Sender ID: ');
   const firebaseAppId = await askQuestion('Firebase App ID: ');
+  const firebaseMeasurementId = await askQuestion('Firebase Measurement ID (optional, for analytics): ');
   const googleMapsApiKey = await askQuestion('Google Maps API Key: ');
   const googleAiApiKey = await askQuestion('Google AI API Key: ');
 
@@ -73,6 +74,7 @@ async function createEnvFile() {
     .replace(/your_project_id\.appspot\.com/g, firebaseStorageBucket)
     .replace(/123456789012/g, firebaseMessagingSenderId)
     .replace(/1:123456789012:web:abcdef1234567890/g, firebaseAppId)
+    .replace(/G-XXXXXXXXXX/g, firebaseMeasurementId || 'G-XXXXXXXXXX')
     .replace(/your_google_maps_api_key_here/g, googleMapsApiKey)
     .replace(/your_google_ai_api_key_here/g, googleAiApiKey);
 

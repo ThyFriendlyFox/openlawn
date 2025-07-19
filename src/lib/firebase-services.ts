@@ -235,6 +235,25 @@ export const subscribeToCustomers = (
   });
 };
 
+export const subscribeToEmployees = (
+  callback: (employees: any[]) => void
+) => {
+  const q = query(collection(db, 'users'), orderBy('displayName'));
+  return onSnapshot(q, (querySnapshot) => {
+    const employees = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.displayName || data.email || 'Unknown',
+        email: data.email,
+        role: data.role || 'employee',
+        status: data.isActive ? 'active' : 'inactive',
+      };
+    });
+    callback(employees);
+  });
+};
+
 export const subscribeToRoutes = (
   date: Date,
   callback: (routes: Route[]) => void
@@ -277,4 +296,4 @@ export const batchUpdateCustomerStatus = async (
   });
   
   await batch.commit();
-}; 
+};

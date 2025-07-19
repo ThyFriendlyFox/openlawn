@@ -47,7 +47,7 @@ export default function LawnRoutePage() {
   const handleAddCustomer = async (newCustomerData: { 
     name: string; 
     address: string; 
-    serviceRequested: string; 
+    serviceRequested: 'push-mow' | 'edge' | 'blow' | 'detail' | 'riding-mow'; 
     notes?: string;
     preferredDays: string[];
     timeRangeStart: string;

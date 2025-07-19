@@ -11,41 +11,52 @@ import {
   orderBy,
   onSnapshot,
   Timestamp,
-  writeBatch,
   QuerySnapshot,
   DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Crew, CrewMember, Vehicle } from './types';
+import type { Crew, Employee } from './types';
 
 // Firestore interfaces
 export interface FirestoreCrew {
   id?: string;
   name: string;
   description?: string;
-  members: FirestoreCrewMember[];
-  vehicle?: FirestoreVehicle;
   companyId: string;
+  employees: FirestoreCrewEmployee[];
+  services: FirestoreCrewService[];
+  status: 'active' | 'inactive';
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    lastUpdated: Timestamp;
+  };
+  vehicle?: {
+    type: string;
+    make: string;
+    model: string;
+    year: number;
+    licensePlate?: string;
+  };
   isActive: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  createdBy: string;
 }
 
-export interface FirestoreCrewMember {
-  userId: string;
-  role: 'driver' | 'operator' | 'helper' | 'supervisor';
-  isActive: boolean;
+export interface FirestoreCrewEmployee {
+  employeeId: string;
+  name: string;
+  email: string;
+  role: 'employee' | 'manager';
+  status: 'active' | 'inactive';
   joinedAt: Timestamp;
 }
 
-export interface FirestoreVehicle {
-  id: string;
-  type: 'truck' | 'trailer' | 'mower' | 'other';
-  make?: string;
-  model?: string;
-  year?: number;
-  licensePlate?: string;
-  capacity?: number;
+export interface FirestoreCrewService {
+  serviceType: string;
+  days: string[];
+  isActive: boolean;
 }
 
 // Convert Firestore data to Crew type
@@ -55,25 +66,31 @@ const convertFirestoreCrew = (doc: any): Crew => {
     id: doc.id,
     name: data.name,
     description: data.description,
-    members: data.members.map((member: FirestoreCrewMember) => ({
-      userId: member.userId,
-      role: member.role,
-      isActive: member.isActive,
-      joinedAt: member.joinedAt.toDate(),
-    })),
-    vehicle: data.vehicle ? {
-      id: data.vehicle.id,
-      type: data.vehicle.type,
-      make: data.vehicle.make,
-      model: data.vehicle.model,
-      year: data.vehicle.year,
-      licensePlate: data.vehicle.licensePlate,
-      capacity: data.vehicle.capacity,
-    } : undefined,
     companyId: data.companyId,
+    employees: data.employees.map((emp: FirestoreCrewEmployee) => ({
+      id: emp.employeeId,
+      name: emp.name,
+      email: emp.email,
+      role: emp.role,
+      status: emp.status,
+      joinedAt: emp.joinedAt.toDate(),
+    })),
+    services: data.services.map((service: FirestoreCrewService) => ({
+      serviceType: service.serviceType,
+      days: service.days,
+      isActive: service.isActive,
+    })),
+    status: data.status,
+    currentLocation: data.currentLocation ? {
+      lat: data.currentLocation.lat,
+      lng: data.currentLocation.lng,
+      lastUpdated: data.currentLocation.lastUpdated.toDate(),
+    } : undefined,
+    vehicle: data.vehicle,
     isActive: data.isActive,
     createdAt: data.createdAt.toDate(),
     updatedAt: data.updatedAt.toDate(),
+    createdBy: data.createdBy,
   };
 };
 
@@ -82,25 +99,31 @@ const convertToFirestoreCrew = (crew: Omit<Crew, 'id' | 'createdAt' | 'updatedAt
   return {
     name: crew.name,
     description: crew.description,
-    members: crew.members.map(member => ({
-      userId: member.userId,
-      role: member.role,
-      isActive: member.isActive,
-      joinedAt: Timestamp.fromDate(member.joinedAt),
-    })),
-    vehicle: crew.vehicle ? {
-      id: crew.vehicle.id,
-      type: crew.vehicle.type,
-      make: crew.vehicle.make,
-      model: crew.vehicle.model,
-      year: crew.vehicle.year,
-      licensePlate: crew.vehicle.licensePlate,
-      capacity: crew.vehicle.capacity,
-    } : undefined,
     companyId: crew.companyId,
+    employees: crew.employees.map(emp => ({
+      employeeId: emp.id,
+      name: emp.name,
+      email: emp.email,
+      role: emp.role,
+      status: emp.status,
+      joinedAt: Timestamp.fromDate(emp.joinedAt),
+    })),
+    services: crew.services.map(service => ({
+      serviceType: service.serviceType,
+      days: service.days,
+      isActive: service.isActive,
+    })),
+    status: crew.status,
+    currentLocation: crew.currentLocation ? {
+      lat: crew.currentLocation.lat,
+      lng: crew.currentLocation.lng,
+      lastUpdated: Timestamp.fromDate(crew.currentLocation.lastUpdated),
+    } : undefined,
+    vehicle: crew.vehicle,
     isActive: crew.isActive,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
+    createdBy: crew.createdBy,
   };
 };
 
@@ -112,7 +135,7 @@ export const getCrews = async (companyId: string): Promise<Crew[]> => {
       crewsRef,
       where('companyId', '==', companyId),
       where('isActive', '==', true),
-      orderBy('name')
+      orderBy('createdAt', 'desc')
     );
     
     const querySnapshot = await getDocs(q);
@@ -123,10 +146,12 @@ export const getCrews = async (companyId: string): Promise<Crew[]> => {
   }
 };
 
-// Get a single crew
+// Get a single crew by ID
 export const getCrew = async (crewId: string): Promise<Crew | null> => {
   try {
-    const crewDoc = await getDoc(doc(db, 'crews', crewId));
+    const crewRef = doc(db, 'crews', crewId);
+    const crewDoc = await getDoc(crewRef);
+    
     if (crewDoc.exists()) {
       return convertFirestoreCrew(crewDoc);
     }
@@ -137,39 +162,19 @@ export const getCrew = async (crewId: string): Promise<Crew | null> => {
   }
 };
 
-// Get crew by member
-export const getCrewByMember = async (userId: string): Promise<Crew | null> => {
+// Create a new crew
+export const createCrew = async (crewData: Omit<Crew, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   try {
-    const crewsRef = collection(db, 'crews');
-    const q = query(
-      crewsRef,
-      where('members', 'array-contains', { userId, isActive: true })
-    );
-    
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      return convertFirestoreCrew(querySnapshot.docs[0]);
-    }
-    return null;
-  } catch (error) {
-    console.error('Error fetching crew by member:', error);
-    throw error;
-  }
-};
-
-// Add a new crew
-export const addCrew = async (crew: Omit<Crew, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  try {
-    const firestoreCrew = convertToFirestoreCrew(crew);
+    const firestoreCrew = convertToFirestoreCrew(crewData);
     const docRef = await addDoc(collection(db, 'crews'), firestoreCrew);
     return docRef.id;
   } catch (error) {
-    console.error('Error adding crew:', error);
+    console.error('Error creating crew:', error);
     throw error;
   }
 };
 
-// Update a crew
+// Update an existing crew
 export const updateCrew = async (crewId: string, updates: Partial<Crew>): Promise<void> => {
   try {
     const crewRef = doc(db, 'crews', crewId);
@@ -178,25 +183,31 @@ export const updateCrew = async (crewId: string, updates: Partial<Crew>): Promis
       updatedAt: Timestamp.now(),
     };
 
-    // Handle nested objects
-    if (updates.members) {
-      updateData.members = updates.members.map(member => ({
-        userId: member.userId,
-        role: member.role,
-        isActive: member.isActive,
-        joinedAt: Timestamp.fromDate(member.joinedAt),
+    // Convert nested objects if they exist
+    if (updates.employees) {
+      updateData.employees = updates.employees.map(emp => ({
+        employeeId: emp.id,
+        name: emp.name,
+        email: emp.email,
+        role: emp.role,
+        status: emp.status,
+        joinedAt: Timestamp.fromDate(emp.joinedAt),
       }));
     }
 
-    if (updates.vehicle) {
-      updateData.vehicle = {
-        id: updates.vehicle.id,
-        type: updates.vehicle.type,
-        make: updates.vehicle.make,
-        model: updates.vehicle.model,
-        year: updates.vehicle.year,
-        licensePlate: updates.vehicle.licensePlate,
-        capacity: updates.vehicle.capacity,
+    if (updates.services) {
+      updateData.services = updates.services.map(service => ({
+        serviceType: service.serviceType,
+        days: service.days,
+        isActive: service.isActive,
+      }));
+    }
+
+    if (updates.currentLocation) {
+      updateData.currentLocation = {
+        lat: updates.currentLocation.lat,
+        lng: updates.currentLocation.lng,
+        lastUpdated: Timestamp.fromDate(updates.currentLocation.lastUpdated),
       };
     }
 
@@ -207,61 +218,8 @@ export const updateCrew = async (crewId: string, updates: Partial<Crew>): Promis
   }
 };
 
-// Add member to crew
-export const addCrewMember = async (crewId: string, member: Omit<CrewMember, 'joinedAt'>): Promise<void> => {
-  try {
-    const crewRef = doc(db, 'crews', crewId);
-    const crewDoc = await getDoc(crewRef);
-    
-    if (!crewDoc.exists()) {
-      throw new Error('Crew not found');
-    }
-
-    const crewData = crewDoc.data();
-    const newMember: FirestoreCrewMember = {
-      userId: member.userId,
-      role: member.role,
-      isActive: member.isActive,
-      joinedAt: Timestamp.now(),
-    };
-
-    const updatedMembers = [...crewData.members, newMember];
-    
-    await updateDoc(crewRef, {
-      members: updatedMembers,
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error adding crew member:', error);
-    throw error;
-  }
-};
-
-// Remove member from crew
-export const removeCrewMember = async (crewId: string, userId: string): Promise<void> => {
-  try {
-    const crewRef = doc(db, 'crews', crewId);
-    const crewDoc = await getDoc(crewRef);
-    
-    if (!crewDoc.exists()) {
-      throw new Error('Crew not found');
-    }
-
-    const crewData = crewDoc.data();
-    const updatedMembers = crewData.members.filter((member: FirestoreCrewMember) => member.userId !== userId);
-    
-    await updateDoc(crewRef, {
-      members: updatedMembers,
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error removing crew member:', error);
-    throw error;
-  }
-};
-
-// Deactivate crew (soft delete)
-export const deactivateCrew = async (crewId: string): Promise<void> => {
+// Delete a crew (soft delete)
+export const deleteCrew = async (crewId: string): Promise<void> => {
   try {
     const crewRef = doc(db, 'crews', crewId);
     await updateDoc(crewRef, {
@@ -269,26 +227,170 @@ export const deactivateCrew = async (crewId: string): Promise<void> => {
       updatedAt: Timestamp.now(),
     });
   } catch (error) {
-    console.error('Error deactivating crew:', error);
+    console.error('Error deleting crew:', error);
     throw error;
   }
 };
 
-// Listen to crews in real-time
+// Add employee to crew
+export const addEmployeeToCrew = async (
+  crewId: string, 
+  employee: Omit<Employee, 'id' | 'joinedAt'>
+): Promise<void> => {
+  try {
+    const crewRef = doc(db, 'crews', crewId);
+    const crewDoc = await getDoc(crewRef);
+    
+    if (!crewDoc.exists()) {
+      throw new Error('Crew not found');
+    }
+
+    const crewData = crewDoc.data();
+    const existingEmployees = crewData.employees || [];
+    
+    // Check if employee already exists
+    const employeeExists = existingEmployees.some((emp: any) => emp.employeeId === employee.id);
+    if (employeeExists) {
+      throw new Error('Employee already exists in crew');
+    }
+
+    const newEmployee: FirestoreCrewEmployee = {
+      employeeId: employee.id,
+      name: employee.name,
+      email: employee.email,
+      role: employee.role,
+      status: employee.status,
+      joinedAt: Timestamp.now(),
+    };
+
+    await updateDoc(crewRef, {
+      employees: [...existingEmployees, newEmployee],
+      updatedAt: Timestamp.now(),
+    });
+  } catch (error) {
+    console.error('Error adding employee to crew:', error);
+    throw error;
+  }
+};
+
+// Remove employee from crew
+export const removeEmployeeFromCrew = async (crewId: string, employeeId: string): Promise<void> => {
+  try {
+    const crewRef = doc(db, 'crews', crewId);
+    const crewDoc = await getDoc(crewRef);
+    
+    if (!crewDoc.exists()) {
+      throw new Error('Crew not found');
+    }
+
+    const crewData = crewDoc.data();
+    const existingEmployees = crewData.employees || [];
+    
+    const updatedEmployees = existingEmployees.filter((emp: any) => emp.employeeId !== employeeId);
+    
+    await updateDoc(crewRef, {
+      employees: updatedEmployees,
+      updatedAt: Timestamp.now(),
+    });
+  } catch (error) {
+    console.error('Error removing employee from crew:', error);
+    throw error;
+  }
+};
+
+// Update crew location
+export const updateCrewLocation = async (
+  crewId: string, 
+  location: { lat: number; lng: number }
+): Promise<void> => {
+  try {
+    const crewRef = doc(db, 'crews', crewId);
+    await updateDoc(crewRef, {
+      currentLocation: {
+        lat: location.lat,
+        lng: location.lng,
+        lastUpdated: Timestamp.now(),
+      },
+      updatedAt: Timestamp.now(),
+    });
+  } catch (error) {
+    console.error('Error updating crew location:', error);
+    throw error;
+  }
+};
+
+// Subscribe to crews for real-time updates
 export const subscribeToCrews = (
   companyId: string,
   callback: (crews: Crew[]) => void
-): (() => void) => {
-  const crewsRef = collection(db, 'crews');
-  const q = query(
-    crewsRef,
-    where('companyId', '==', companyId),
-    where('isActive', '==', true),
-    orderBy('name')
-  );
+): () => void => {
+  try {
+    const crewsRef = collection(db, 'crews');
+    // Simplified query to avoid index requirements
+    const q = query(
+      crewsRef,
+      where('companyId', '==', companyId)
+    );
 
-  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const crews = querySnapshot.docs.map(convertFirestoreCrew);
-    callback(crews);
-  });
+    const unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+      const crews = querySnapshot.docs
+        .map(convertFirestoreCrew)
+        .filter(crew => crew.isActive) // Filter client-side
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort client-side
+      callback(crews);
+    }, (error) => {
+      console.error('Error subscribing to crews:', error);
+    });
+
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up crews subscription:', error);
+    return () => {};
+  }
+};
+
+// Get crews by status
+export const getCrewsByStatus = async (companyId: string, status: 'active' | 'inactive'): Promise<Crew[]> => {
+  try {
+    const crewsRef = collection(db, 'crews');
+    const q = query(
+      crewsRef,
+      where('companyId', '==', companyId),
+      where('status', '==', status),
+      where('isActive', '==', true),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(convertFirestoreCrew);
+  } catch (error) {
+    console.error('Error fetching crews by status:', error);
+    throw error;
+  }
+};
+
+// Get crews by service type
+export const getCrewsByService = async (companyId: string, serviceType: string): Promise<Crew[]> => {
+  try {
+    const crewsRef = collection(db, 'crews');
+    const q = query(
+      crewsRef,
+      where('companyId', '==', companyId),
+      where('isActive', '==', true),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const allCrews = querySnapshot.docs.map(convertFirestoreCrew);
+    
+    // Filter by service type (since Firestore doesn't support array-contains queries on nested fields)
+    return allCrews.filter(crew => 
+      crew.services.some(service => 
+        service.serviceType === serviceType && service.isActive
+      )
+    );
+  } catch (error) {
+    console.error('Error fetching crews by service:', error);
+    throw error;
+  }
 }; 

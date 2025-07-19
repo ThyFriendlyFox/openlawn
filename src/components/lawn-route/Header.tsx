@@ -78,7 +78,7 @@ export function Header() {
           <div className="h-10 w-10 rounded-full bg-muted animate-pulse"></div>
         </div>
       ) : user ? (
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 ml-auto">
           {userProfile && (
             <Badge className={getRoleColor(userProfile.role)}>
               {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}

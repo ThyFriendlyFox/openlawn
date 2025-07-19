@@ -1,3 +1,5 @@
+export type ServiceType = 'push-mow' | 'edge' | 'blow' | 'detail' | 'riding-mow';
+
 export type Customer = {
   id: string;
   name: string;
@@ -5,7 +7,7 @@ export type Customer = {
   lat: number;
   lng: number;
   notes: string;
-  serviceRequested: string;
+  serviceRequested: ServiceType;
   // New fields for scheduling
   servicePreferences: ServicePreferences;
   serviceHistory: ServiceRecord[];
@@ -37,21 +39,50 @@ export type ServiceRecord = {
   status: 'completed' | 'in-progress' | 'cancelled' | 'no-show';
 };
 
+export type Employee = {
+  id: string;
+  name: string;
+  email: string;
+  role: 'employee' | 'manager';
+  status: 'active' | 'inactive';
+  joinedAt: Date;
+};
+
 export type Crew = {
   id: string;
   name: string;
   description?: string;
-  members: CrewMember[];
-  vehicle?: Vehicle;
   companyId: string;
+  employees: Employee[];
+  services: CrewService[];
+  status: 'active' | 'inactive';
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    lastUpdated: Date;
+  };
+  vehicle?: {
+    type: string;
+    make: string;
+    model: string;
+    year: number;
+    licensePlate?: string;
+  };
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  createdBy: string;
+};
+
+export type CrewService = {
+  serviceType: string;
+  days: string[];
+  isActive: boolean;
 };
 
 export type CrewMember = {
   userId: string;
-  role: 'driver' | 'operator' | 'helper' | 'supervisor';
+  role: 'employee' | 'manager';
   isActive: boolean;
   joinedAt: Date;
 };
@@ -121,7 +152,7 @@ export type UserProfile = {
   email: string;
   displayName?: string;
   photoURL?: string;
-  role: 'admin' | 'manager' | 'supervisor' | 'operator' | 'helper';
+  role: 'employee' | 'manager';
   companyId?: string;
   crewId?: string; // Which crew they belong to
   schedule?: UserSchedule;

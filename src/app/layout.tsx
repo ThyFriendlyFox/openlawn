@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/hooks/use-auth"
+import { RoleBasedRouter } from "@/components/auth/RoleBasedRouter"
 
 export const metadata: Metadata = {
   title: 'LawnRoute',
@@ -22,7 +23,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-          {children}
+          <RoleBasedRouter>
+            {children}
+          </RoleBasedRouter>
           <Toaster />
         </AuthProvider>
       </body>

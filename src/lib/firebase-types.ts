@@ -31,7 +31,7 @@ export interface Employee extends BaseDocument {
   name: string;
   email: string;
   phone: string;
-  role: 'driver' | 'crew_member' | 'supervisor' | 'admin';
+  role: 'employee' | 'manager';
   crewId?: string;
   schedule: {
     monday: { start: string; end: string; available: boolean };

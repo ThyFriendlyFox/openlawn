@@ -17,7 +17,7 @@ import {
   DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Customer } from './types';
+import type { Customer, ServiceType } from './types';
 
 // Customer interface for Firestore
 export interface FirestoreCustomer {
@@ -27,7 +27,7 @@ export interface FirestoreCustomer {
   lat: number;
   lng: number;
   notes: string;
-  serviceRequested: string;
+  serviceRequested: ServiceType;
   email?: string;
   phone?: string;
   createdAt: Timestamp;

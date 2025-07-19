@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { PlacesAutocompleteSimple } from "@/components/ui/places-autocomplete-simple"
 import {
   Sheet,
   SheetContent,
@@ -42,7 +43,11 @@ interface AddCustomerSheetProps {
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   address: z.string().min(5, { message: "Please enter a valid address." }),
-  serviceRequested: z.string().min(3, { message: "Service description is too short."}),
+  coordinates: z.object({
+    lat: z.number().optional(),
+    lng: z.number().optional(),
+  }).optional(),
+  serviceRequested: z.enum(['push-mow', 'edge', 'blow', 'detail', 'riding-mow']),
   notes: z.string().optional(),
   // Service preferences
   preferredDays: z.array(z.string()).min(1, { message: "Please select at least one preferred day." }),
@@ -79,6 +84,14 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
     { value: 'sunday', label: 'Sunday', short: 'Sun' },
   ];
 
+  const SERVICE_TYPES = [
+    { value: 'push-mow', label: 'Push Mow' },
+    { value: 'edge', label: 'Edge' },
+    { value: 'blow', label: 'Blow' },
+    { value: 'detail', label: 'Detail' },
+    { value: 'riding-mow', label: 'Riding Mow' },
+  ];
+
   const SERVICE_FREQUENCIES = [
     { value: 'weekly', label: 'Weekly' },
     { value: 'biweekly', label: 'Bi-weekly' },
@@ -90,7 +103,8 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
     defaultValues: {
       name: "",
       address: "",
-      serviceRequested: "",
+      coordinates: undefined,
+      serviceRequested: "push-mow",
       notes: "",
       preferredDays: [],
       timeRangeStart: "08:00",
@@ -133,7 +147,16 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-lg max-h-[90svh] overflow-y-auto">
+      <SheetContent 
+        side="bottom" 
+        className="rounded-t-lg max-h-[90svh] overflow-y-auto"
+        onPointerDownOutside={(e) => {
+          // Don't close if clicking on autocomplete
+          if (e.target && (e.target as Element).closest('.pac-container')) {
+            e.preventDefault()
+          }
+        }}
+      >
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <SheetHeader className="text-left">
@@ -162,8 +185,20 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="123 Main St, Anytown, USA" {...field} />
+                                        <FormControl>
+                      <PlacesAutocompleteSimple
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Start typing an address..."
+                        onPlaceSelect={(place: google.maps.places.PlaceResult) => {
+                          // Extract coordinates when a place is selected
+                          if (place.geometry?.location) {
+                            const lat = place.geometry.location.lat()
+                            const lng = place.geometry.location.lng()
+                            form.setValue('coordinates', { lat, lng })
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -174,10 +209,21 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
                 name="serviceRequested"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Service Requested</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Weekly mowing" {...field} />
-                    </FormControl>
+                    <FormLabel>Service Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select service type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {SERVICE_TYPES.map((service) => (
+                          <SelectItem key={service.value} value={service.value}>
+                            {service.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

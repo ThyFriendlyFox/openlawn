@@ -18,36 +18,9 @@ export function RoleBasedRouter({ children }: RoleBasedRouterProps) {
     // Don't redirect while loading or if no user
     if (loading || !user) return
 
-    // If user has no profile, redirect to employee view (default)
-    if (!userProfile) {
-      if (pathname !== '/') {
-        router.replace('/')
-      }
-      return
-    }
-
-    const { role } = userProfile
-
-    // Define role-based routing rules
-    const isManagerOrAdmin = role === 'manager' || role === 'admin'
-    const isEmployee = role === 'employee'
-
-    // Redirect based on role
-    if (isManagerOrAdmin) {
-      // Managers and admins go to manager view
-      if (pathname !== '/manager') {
-        router.replace('/manager')
-      }
-    } else if (isEmployee) {
-      // Employees go to employee view
-      if (pathname !== '/') {
-        router.replace('/')
-      }
-    } else {
-      // Unknown role, default to employee view
-      if (pathname !== '/') {
-        router.replace('/')
-      }
+    // Always redirect to main route - role-based functionality is handled in the component
+    if (pathname !== '/') {
+      router.replace('/')
     }
   }, [user, userProfile, loading, router, pathname])
 

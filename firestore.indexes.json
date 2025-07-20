@@ -19,34 +19,16 @@
       ]
     },
     {
-      "collectionGroup": "customers",
+      "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "createdBy",
+          "fieldPath": "role",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "status",
+          "fieldPath": "crewId",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "serviceRequested",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "routes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "createdBy",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "date",
-          "order": "DESCENDING"
         }
       ]
     }

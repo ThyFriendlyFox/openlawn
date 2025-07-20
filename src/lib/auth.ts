@@ -5,53 +5,45 @@ import {
   onAuthStateChanged,
   updateProfile,
   sendPasswordResetEmail,
-  User,
+  User as FirebaseUser,
   UserCredential
 } from 'firebase/auth';
 import { auth } from './firebase';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
-
-// User profile interface
-export interface UserProfile {
-  uid: string;
-  email: string;
-  displayName?: string;
-  photoURL?: string;
-  role: 'admin' | 'employee' | 'manager';
-  companyId?: string;
-  createdAt: Date;
-  lastLoginAt: Date;
-  isActive: boolean;
-}
+import type { User } from './firebase-types';
 
 // Authentication state interface
 export interface AuthState {
-  user: User | null;
-  userProfile: UserProfile | null;
+  user: FirebaseUser | null;
+  userProfile: User | null;
   loading: boolean;
   error: string | null;
 }
 
 // Create user profile in Firestore
-const createUserProfile = async (user: User, additionalData?: Partial<UserProfile>): Promise<void> => {
-  const userProfile: UserProfile = {
-    uid: user.uid,
+const createUserProfile = async (user: FirebaseUser, additionalData?: Partial<User>): Promise<void> => {
+  const userProfile: Omit<User, 'id' | 'createdAt' | 'updatedAt'> = {
+    name: user.displayName || '',
     email: user.email || '',
-    displayName: user.displayName || '',
-    photoURL: user.photoURL || '',
+    phone: '',
     role: 'employee', // Default role
-    createdAt: new Date(),
-    lastLoginAt: new Date(),
-    isActive: true,
+    crewId: undefined,
+    schedule: undefined,
+    currentLocation: undefined,
+    status: 'available',
     ...additionalData
   };
 
-  await setDoc(doc(db, 'users', user.uid), userProfile);
+  await setDoc(doc(db, 'users', user.uid), {
+    ...userProfile,
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
+  });
 };
 
 // Update user profile (creates if doesn't exist)
-export const updateUserProfile = async (uid: string, updates: Partial<UserProfile>): Promise<void> => {
+export const updateUserProfile = async (uid: string, updates: Partial<User>): Promise<void> => {
   const userRef = doc(db, 'users', uid);
   
   // Check if document exists
@@ -61,31 +53,48 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
     // Update existing document
     await updateDoc(userRef, {
       ...updates,
-      lastLoginAt: new Date()
+      updatedAt: Timestamp.now()
     });
   } else {
     // Create new document with basic profile
-    const basicProfile: UserProfile = {
-      uid,
-      email: '', // Will be filled by the calling function
-      displayName: '',
-      photoURL: '',
+    const basicProfile: Omit<User, 'id' | 'createdAt' | 'updatedAt'> = {
+      name: '',
+      email: '',
+      phone: '',
       role: 'employee',
-      createdAt: new Date(),
-      lastLoginAt: new Date(),
-      isActive: true,
+      crewId: undefined,
+      schedule: undefined,
+      currentLocation: undefined,
+      status: 'available',
       ...updates
     };
-    await setDoc(userRef, basicProfile);
+    await setDoc(userRef, {
+      ...basicProfile,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
   }
 };
 
 // Get user profile from Firestore
-export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
+export const getUserProfile = async (uid: string): Promise<User | null> => {
   try {
     const userDoc = await getDoc(doc(db, 'users', uid));
     if (userDoc.exists()) {
-      return userDoc.data() as UserProfile;
+      const data = userDoc.data();
+      return {
+        id: userDoc.id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        role: data.role || 'employee',
+        crewId: data.crewId,
+        schedule: data.schedule,
+        currentLocation: data.currentLocation,
+        status: data.status || 'available',
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      };
     }
     return null;
   } catch (error) {
@@ -99,7 +108,7 @@ export const signUpWithEmail = async (
   email: string, 
   password: string, 
   displayName?: string,
-  role?: 'admin' | 'employee' | 'manager'
+  role?: 'employee' | 'manager' | 'admin'
 ): Promise<UserCredential> => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -111,7 +120,7 @@ export const signUpWithEmail = async (
 
     // Create user profile in Firestore
     await createUserProfile(userCredential.user, { 
-      displayName,
+      name: displayName || '',
       role: role || 'employee'
     });
 
@@ -130,8 +139,7 @@ export const signInWithEmail = async (email: string, password: string): Promise<
     // Update or create user profile
     await updateUserProfile(userCredential.user.uid, { 
       email: userCredential.user.email || email,
-      displayName: userCredential.user.displayName || '',
-      photoURL: userCredential.user.photoURL || ''
+      name: userCredential.user.displayName || '',
     });
     
     return userCredential;
@@ -162,12 +170,12 @@ export const resetPassword = async (email: string): Promise<void> => {
 };
 
 // Get current user
-export const getCurrentUser = (): User | null => {
+export const getCurrentUser = (): FirebaseUser | null => {
   return auth.currentUser;
 };
 
 // Listen to authentication state changes
-export const onAuthStateChange = (callback: (user: User | null) => void): (() => void) => {
+export const onAuthStateChange = (callback: (user: FirebaseUser | null) => void): (() => void) => {
   return onAuthStateChanged(auth, callback);
 };
 

@@ -1,6 +1,6 @@
 "use client"
 
-import type { Customer } from "@/lib/types"
+import type { Customer } from "@/lib/firebase-types"
 import {
   Sheet,
   SheetContent,
@@ -19,6 +19,8 @@ interface CustomerDetailsSheetProps {
 }
 
 export function CustomerDetailsSheet({ customer, open, onOpenChange }: CustomerDetailsSheetProps) {
+  const primaryService = customer.services?.[0];
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-lg max-h-[90svh] overflow-y-auto">
@@ -34,13 +36,33 @@ export function CustomerDetailsSheet({ customer, open, onOpenChange }: CustomerD
         </SheetHeader>
         
         <div className="space-y-6 py-4">
-          <div className="space-y-2">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-accent" />
-              Service Details
-            </h3>
-            <p className="text-muted-foreground pl-7">{customer.serviceRequested}</p>
-          </div>
+          {primaryService && (
+            <div className="space-y-2">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Wrench className="w-5 h-5 text-accent" />
+                Service Details
+              </h3>
+              <div className="pl-7 space-y-1">
+                <p className="text-muted-foreground">
+                  <strong>Type:</strong> {primaryService.type}
+                </p>
+                <p className="text-muted-foreground">
+                  <strong>Description:</strong> {primaryService.description}
+                </p>
+                <p className="text-muted-foreground">
+                  <strong>Price:</strong> ${primaryService.price}
+                </p>
+                <p className="text-muted-foreground">
+                  <strong>Status:</strong> {primaryService.status}
+                </p>
+                {primaryService.scheduledDate && (
+                  <p className="text-muted-foreground">
+                    <strong>Scheduled:</strong> {new Date(primaryService.scheduledDate.toDate()).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <h3 className="font-semibold flex items-center gap-2">

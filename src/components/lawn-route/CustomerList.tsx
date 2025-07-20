@@ -1,7 +1,7 @@
 "use client"
 
-import type { Customer } from "@/lib/types"
 import { CustomerCard } from "./CustomerCard"
+import type { Customer } from "@/lib/firebase-types"
 
 interface CustomerListProps {
   customers: Customer[]

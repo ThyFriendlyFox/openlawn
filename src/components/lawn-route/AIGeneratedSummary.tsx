@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import type { Customer } from "@/lib/types"
+import type { Customer } from "@/lib/firebase-types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sparkles, Loader2 } from "lucide-react"
@@ -15,6 +15,8 @@ export function AIGeneratedSummary({ customer }: AIGeneratedSummaryProps) {
   const [summary, setSummary] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
 
+  const primaryService = customer.services?.[0];
+
   const handleGenerateSummary = async () => {
     setIsLoading(true)
     setSummary("")
@@ -22,7 +24,7 @@ export function AIGeneratedSummary({ customer }: AIGeneratedSummaryProps) {
       customerName: customer.name,
       interactionNotes: customer.notes,
       propertyDetails: `Customer is located at ${customer.address}.`,
-      serviceRequested: customer.serviceRequested,
+      serviceRequested: primaryService?.type || 'No service specified',
     })
     setSummary(result.summary)
     setIsLoading(false)

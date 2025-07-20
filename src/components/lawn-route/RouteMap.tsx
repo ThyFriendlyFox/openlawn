@@ -7,7 +7,7 @@ import {
   Marker,
   DirectionsRenderer,
 } from '@react-google-maps/api'
-import type { Customer } from '@/lib/types'
+import type { Customer } from '@/lib/firebase-types'
 import { Loader2, AlertTriangle } from 'lucide-react'
 
 interface RouteMapProps {

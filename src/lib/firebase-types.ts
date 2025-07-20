@@ -7,33 +7,14 @@ export interface BaseDocument {
   updatedAt: Timestamp;
 }
 
-// Customer model
-export interface Customer extends BaseDocument {
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  notes: string;
-  serviceRequested: string;
-  billingInfo: {
-    email?: string;
-    phone?: string;
-    paymentMethod?: string;
-  };
-  status: 'active' | 'inactive' | 'pending';
-  assignedCrew?: string;
-  lastServiceDate?: Timestamp;
-  nextServiceDate?: Timestamp;
-}
-
-// Employee model
-export interface Employee extends BaseDocument {
+// User model with role-based access
+export interface User extends BaseDocument {
   name: string;
   email: string;
-  phone: string;
-  role: 'employee' | 'manager';
-  crewId?: string;
-  schedule: {
+  phone?: string;
+  role: 'employee' | 'manager' | 'admin';
+  crewId?: string; // Simple crew grouping
+  schedule?: {
     monday: { start: string; end: string; available: boolean };
     tuesday: { start: string; end: string; available: boolean };
     wednesday: { start: string; end: string; available: boolean };
@@ -50,40 +31,9 @@ export interface Employee extends BaseDocument {
   status: 'available' | 'busy' | 'offline';
 }
 
-// Crew model
-export interface Crew extends BaseDocument {
-  name: string;
-  members: string[]; // Employee IDs
-  vehicle?: {
-    id: string;
-    type: string;
-    capacity: number;
-  };
-  assignedRoute?: string;
-  status: 'active' | 'inactive';
-}
-
-// Route model
-export interface Route extends BaseDocument {
-  date: Timestamp;
-  crewId: string;
-  stops: {
-    customerId: string;
-    order: number;
-    estimatedArrival: Timestamp;
-    actualArrival?: Timestamp;
-    status: 'pending' | 'in_progress' | 'completed' | 'skipped';
-    notes?: string;
-  }[];
-  totalDistance: number;
-  totalDuration: number;
-  status: 'planned' | 'in_progress' | 'completed';
-  optimizedAt?: Timestamp;
-}
-
-// Service model
-export interface Service extends BaseDocument {
-  customerId: string;
+// Service model (embedded in customers)
+export interface Service {
+  id: string;
   type: string;
   description: string;
   price: number;
@@ -92,28 +42,24 @@ export interface Service extends BaseDocument {
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
   notes?: string;
   photos?: string[]; // URLs to photos in Firebase Storage
+  assignedCrew?: string;
 }
 
-// Company settings
-export interface CompanySettings extends BaseDocument {
+// Customer model with embedded services
+export interface Customer extends BaseDocument {
   name: string;
   address: string;
-  phone: string;
-  email: string;
-  timezone: string;
-  businessHours: {
-    monday: { open: string; close: string; closed: boolean };
-    tuesday: { open: string; close: string; closed: boolean };
-    wednesday: { open: string; close: string; closed: boolean };
-    thursday: { open: string; close: string; closed: boolean };
-    friday: { open: string; close: string; closed: boolean };
-    saturday: { open: string; close: string; closed: boolean };
-    sunday: { open: string; close: string; closed: boolean };
+  lat: number;
+  lng: number;
+  notes: string;
+  billingInfo: {
+    email?: string;
+    phone?: string;
+    paymentMethod?: string;
   };
-  serviceTypes: {
-    id: string;
-    name: string;
-    basePrice: number;
-    description: string;
-  }[];
+  status: 'active' | 'inactive' | 'pending';
+  services: Service[]; // Embedded services array
+  lastServiceDate?: Timestamp;
+  nextServiceDate?: Timestamp;
+  createdBy: string; // User ID who created this customer
 } 

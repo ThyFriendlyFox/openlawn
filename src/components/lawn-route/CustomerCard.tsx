@@ -1,4 +1,4 @@
-import type { Customer } from "@/lib/types"
+import type { Customer } from "@/lib/firebase-types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MapPin, Plus, Calendar, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -29,6 +29,9 @@ export function CustomerCard({
     )
   }
 
+  const primaryService = customer?.services?.[0];
+  const lastServiceDate = customer?.lastServiceDate;
+
   return (
     <Card
       className="h-full flex flex-col hover:shadow-lg transition-shadow cursor-pointer"
@@ -37,9 +40,9 @@ export function CustomerCard({
       <CardHeader>
         <div className="flex items-start justify-between">
           <CardTitle className="text-lg font-headline">{customer?.name}</CardTitle>
-          {customer?.servicePreferences && (
+          {primaryService && (
             <Badge variant="outline" className="text-xs">
-              {customer.servicePreferences.serviceFrequency}
+              {primaryService.type}
             </Badge>
           )}
         </div>
@@ -50,30 +53,29 @@ export function CustomerCard({
           <p>{customer?.address}</p>
         </div>
         
-        {customer?.servicePreferences && (
+        {primaryService && (
           <div className="space-y-2">
             <div className="flex items-center text-xs text-muted-foreground">
               <Calendar className="w-3 h-3 mr-1" />
               <span>
-                {customer.servicePreferences.preferredDays.length > 0 
-                  ? customer.servicePreferences.preferredDays.slice(0, 2).join(', ')
-                  : 'No preferred days'
+                {primaryService.scheduledDate ? 
+                  new Date(primaryService.scheduledDate.toDate()).toLocaleDateString() : 
+                  'No date scheduled'
                 }
-                {customer.servicePreferences.preferredDays.length > 2 && '...'}
               </span>
             </div>
             <div className="flex items-center text-xs text-muted-foreground">
               <Clock className="w-3 h-3 mr-1" />
               <span>
-                {customer.servicePreferences.preferredTimeRange.start} - {customer.servicePreferences.preferredTimeRange.end}
+                ${primaryService.price}
               </span>
             </div>
           </div>
         )}
         
-        {customer?.serviceHistory && customer.serviceHistory.length > 0 && (
+        {lastServiceDate && (
           <div className="text-xs text-muted-foreground">
-            Last service: {new Date(customer.serviceHistory[0].date).toLocaleDateString()}
+            Last service: {new Date(lastServiceDate.toDate()).toLocaleDateString()}
           </div>
         )}
       </CardContent>

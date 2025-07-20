@@ -15,11 +15,9 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { PlacesAutocompleteSimple } from "@/components/ui/places-autocomplete-simple"
 import {
   Sheet,
@@ -32,7 +30,7 @@ import {
 } from "@/components/ui/sheet"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar, Clock } from "lucide-react"
-import type { DayOfWeek } from "@/lib/types"
+import type { ServicePreferences, DayOfWeek } from "@/lib/types"
 
 interface AddCustomerSheetProps {
   open: boolean
@@ -47,42 +45,22 @@ const formSchema = z.object({
     lat: z.number().optional(),
     lng: z.number().optional(),
   }).optional(),
-  serviceRequested: z.enum(['push-mow', 'edge', 'blow', 'detail', 'riding-mow']),
   notes: z.string().optional(),
-  // Service preferences
-  preferredDays: z.array(z.string()).min(1, { message: "Please select at least one preferred day." }),
-  timeRangeStart: z.string(),
-  timeRangeEnd: z.string(),
-  serviceFrequency: z.enum(['weekly', 'biweekly', 'monthly', 'one-time']),
+  serviceType: z.enum(['push-mow', 'edge', 'blow', 'detail', 'riding-mow']),
+  servicePreferences: z.object({
+    preferredDays: z.array(z.enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])).default([]),
+    preferredTimeRange: z.object({
+      start: z.string(),
+      end: z.string(),
+    }),
+    serviceFrequency: z.enum(['weekly', 'biweekly', 'monthly', 'one-time']).default('weekly'),
+    specialInstructions: z.string().optional(),
+  }),
 })
 
 export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCustomerSheetProps) {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const [timeRange, setTimeRange] = React.useState([480, 1020]) // 8:00 AM to 5:00 PM in minutes
-
-  // Convert time string (HH:MM) to minutes since midnight
-  const timeToMinutes = (time: string): number => {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 60 + minutes;
-  };
-
-  // Convert minutes since midnight to time string (HH:MM)
-  const minutesToTime = (minutes: number): string => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-  };
-
-  const DAYS_OF_WEEK: { value: DayOfWeek; label: string; short: string }[] = [
-    { value: 'monday', label: 'Monday', short: 'Mon' },
-    { value: 'tuesday', label: 'Tuesday', short: 'Tue' },
-    { value: 'wednesday', label: 'Wednesday', short: 'Wed' },
-    { value: 'thursday', label: 'Thursday', short: 'Thu' },
-    { value: 'friday', label: 'Friday', short: 'Fri' },
-    { value: 'saturday', label: 'Saturday', short: 'Sat' },
-    { value: 'sunday', label: 'Sunday', short: 'Sun' },
-  ];
 
   const SERVICE_TYPES = [
     { value: 'push-mow', label: 'Push Mow' },
@@ -92,38 +70,24 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
     { value: 'riding-mow', label: 'Riding Mow' },
   ];
 
-  const SERVICE_FREQUENCIES = [
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'biweekly', label: 'Bi-weekly' },
-    { value: 'monthly', label: 'Monthly' },
-    { value: 'one-time', label: 'One-time' },
-  ];
-
   const form = useForm<z.infer<typeof formSchema>>({
     defaultValues: {
       name: "",
       address: "",
       coordinates: undefined,
-      serviceRequested: "push-mow",
       notes: "",
-      preferredDays: [],
-      timeRangeStart: "08:00",
-      timeRangeEnd: "17:00",
-      serviceFrequency: "weekly",
+      serviceType: "push-mow",
+      servicePreferences: {
+        preferredDays: [],
+        preferredTimeRange: {
+          start: "08:00",
+          end: "17:00",
+        },
+        serviceFrequency: 'weekly',
+        specialInstructions: '',
+      },
     },
   })
-
-  // Sync slider with form values when form is reset
-  React.useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'timeRangeStart' || name === 'timeRangeEnd') {
-        const start = timeToMinutes(value.timeRangeStart || "08:00");
-        const end = timeToMinutes(value.timeRangeEnd || "17:00");
-        setTimeRange([start, end]);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
@@ -185,7 +149,7 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Address</FormLabel>
-                                        <FormControl>
+                    <FormControl>
                       <PlacesAutocompleteSimple
                         value={field.value}
                         onChange={field.onChange}
@@ -206,7 +170,7 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
               />
               <FormField
                 control={form.control}
-                name="serviceRequested"
+                name="serviceType"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Service Type</FormLabel>
@@ -248,36 +212,56 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
                   <Calendar className="w-5 h-5" />
                   <h3 className="text-lg font-semibold">Service Preferences</h3>
                 </div>
-
-                {/* Preferred Days */}
+                
                 <FormField
                   control={form.control}
-                  name="preferredDays"
-                  render={({ field }) => (
+                  name="servicePreferences.preferredDays"
+                  render={() => (
                     <FormItem>
                       <FormLabel>Preferred Service Days</FormLabel>
-                      <div className="grid grid-cols-7 gap-4">
-                        {DAYS_OF_WEEK.map((day) => (
-                          <div key={day.value} className="flex flex-col items-center space-y-3">
-                            <Checkbox
-                              id={day.value}
-                              checked={field.value.includes(day.value)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  field.onChange([...field.value, day.value]);
-                                } else {
-                                  field.onChange(field.value.filter((d) => d !== day.value));
-                                }
-                              }}
-                              className="w-8 h-8 border-2 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                            />
-                            <Label 
-                              htmlFor={day.value} 
-                              className="text-base font-semibold cursor-pointer text-center hover:text-primary transition-colors"
-                            >
-                              {day.short}
-                            </Label>
-                          </div>
+                      <div className="grid grid-cols-7 gap-3">
+                        {[
+                          { value: 'monday', short: 'Mon' },
+                          { value: 'tuesday', short: 'Tue' },
+                          { value: 'wednesday', short: 'Wed' },
+                          { value: 'thursday', short: 'Thu' },
+                          { value: 'friday', short: 'Fri' },
+                          { value: 'saturday', short: 'Sat' },
+                          { value: 'sunday', short: 'Sun' },
+                        ].map((day) => (
+                          <FormField
+                            key={day.value}
+                            control={form.control}
+                            name="servicePreferences.preferredDays"
+                            render={({ field }) => {
+                              return (
+                                <FormItem
+                                  key={day.value}
+                                  className="flex flex-col items-center space-y-2"
+                                >
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(day.value as DayOfWeek)}
+                                      onCheckedChange={(checked) => {
+                                        const currentDays = field.value || [];
+                                        return checked
+                                          ? field.onChange([...currentDays, day.value as DayOfWeek])
+                                          : field.onChange(
+                                              currentDays.filter(
+                                                (value) => value !== day.value
+                                              )
+                                            )
+                                      }}
+                                      className="w-10 h-10"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-medium cursor-pointer">
+                                    {day.short}
+                                  </FormLabel>
+                                </FormItem>
+                              )
+                            }}
+                          />
                         ))}
                       </div>
                       <FormMessage />
@@ -285,44 +269,48 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
                   )}
                 />
 
-                {/* Time Range Slider */}
                 <FormField
                   control={form.control}
-                  name="timeRangeStart"
+                  name="servicePreferences.preferredTimeRange"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        Preferred Time Range
-                      </FormLabel>
-                      <div className="px-2 py-4">
-                        <Slider
-                          value={timeRange}
-                          onValueChange={(values) => {
-                            setTimeRange(values);
-                            // Update form values
-                            field.onChange(minutesToTime(values[0]));
-                            form.setValue('timeRangeEnd', minutesToTime(values[1]));
-                          }}
-                          max={1440} // 24 hours in minutes
-                          min={0}
-                          step={15} // 15-minute intervals
-                          className="w-full"
-                        />
-                        <div className="flex justify-between text-sm text-muted-foreground mt-2">
-                          <span>{minutesToTime(timeRange[0])}</span>
-                          <span>{minutesToTime(timeRange[1])}</span>
-                        </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-5 h-5" />
+                        <FormLabel>Preferred Time Range</FormLabel>
                       </div>
+                      <FormControl>
+                        <div className="space-y-4">
+                          <Slider
+                            value={[
+                              parseInt(field.value?.start?.split(':')[0] || '8') * 60 + parseInt(field.value?.start?.split(':')[1] || '0'),
+                              parseInt(field.value?.end?.split(':')[0] || '17') * 60 + parseInt(field.value?.end?.split(':')[1] || '0')
+                            ]}
+                            onValueChange={(values) => {
+                              const [start, end] = values;
+                              field.onChange({
+                                start: `${Math.floor(start / 60).toString().padStart(2, '0')}:${(start % 60).toString().padStart(2, '0')}`,
+                                end: `${Math.floor(end / 60).toString().padStart(2, '0')}:${(end % 60).toString().padStart(2, '0')}`,
+                              });
+                            }}
+                            max={24 * 60}
+                            min={0}
+                            step={15}
+                            className="w-full"
+                          />
+                          <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>{field.value?.start || '08:00'}</span>
+                            <span>{field.value?.end || '17:00'}</span>
+                          </div>
+                        </div>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                {/* Service Frequency */}
                 <FormField
                   control={form.control}
-                  name="serviceFrequency"
+                  name="servicePreferences.serviceFrequency"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Service Frequency</FormLabel>
@@ -333,27 +321,26 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {SERVICE_FREQUENCIES.map((frequency) => (
-                            <SelectItem key={frequency.value} value={frequency.value}>
-                              {frequency.label}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                          <SelectItem value="one-time">One-time</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-
               </div>
             </div>
             <SheetFooter>
               <SheetClose asChild>
-                  <Button type="button" variant="ghost">Cancel</Button>
+                <Button type="button" variant="outline">
+                  Cancel
+                </Button>
               </SheetClose>
-              <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitting}>
-                {isSubmitting ? "Adding Customer..." : "Save Customer"}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Adding..." : "Add Customer"}
               </Button>
             </SheetFooter>
           </form>

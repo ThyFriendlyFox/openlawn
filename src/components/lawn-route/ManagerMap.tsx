@@ -5,48 +5,14 @@ import {
   GoogleMap,
   useJsApiLoader,
   Marker,
-  DirectionsRenderer,
 } from '@react-google-maps/api'
-import type { Customer } from '@/lib/types'
-import { Loader2, AlertTriangle, Users, MapPin } from 'lucide-react'
-import { groupNearbyEmployees } from '@/lib/location-utils'
-
-interface Crew {
-  id: string;
-  name: string;
-  employees: Employee[];
-  services: {
-    serviceType: string;
-    days: string[];
-  }[];
-  status: 'active' | 'inactive';
-  currentLocation?: {
-    lat: number;
-    lng: number;
-    lastUpdated: Date;
-  };
-  routeProgress: number; // 0-100
-}
-
-interface Employee {
-  id: string;
-  name: string;
-  email: string;
-  role: 'driver' | 'operator' | 'helper' | 'supervisor';
-  location?: {
-    lat: number;
-    lng: number;
-    lastUpdated: Date;
-  };
-  status: 'active' | 'inactive';
-}
+import type { Customer, User } from '@/lib/firebase-types'
+import { Loader2, AlertTriangle, MapPin } from 'lucide-react'
 
 interface ManagerMapProps {
   customers: Customer[]
-  crews: Crew[]
-  selectedCrew: Crew | null
+  employees: User[]
   selectedCustomer: Customer | null
-  onSelectCrew: (crew: Crew) => void
   onSelectCustomer: (customer: Customer) => void
   apiKey?: string;
 }
@@ -81,22 +47,10 @@ const mapOptions = {
   ],
 }
 
-// Crew colors for different route lines
-const crewColors = [
-  '#3B82F6', // Blue
-  '#EF4444', // Red
-  '#10B981', // Green
-  '#F59E0B', // Yellow
-  '#8B5CF6', // Purple
-  '#EC4899', // Pink
-];
-
 export function ManagerMap({ 
   customers, 
-  crews, 
-  selectedCrew, 
+  employees, 
   selectedCustomer, 
-  onSelectCrew, 
   onSelectCustomer, 
   apiKey 
 }: ManagerMapProps) {
@@ -119,59 +73,7 @@ export function ManagerMap({
     }
   }, [loadError]);
 
-  const [crewRoutes, setCrewRoutes] = React.useState<{
-    [crewId: string]: google.maps.DirectionsResult | null
-  }>({})
-  
   const mapRef = React.useRef<google.maps.Map | null>(null)
-
-  // Generate routes for each crew (mock implementation for now)
-  React.useEffect(() => {
-    if (!isLoaded || customers.length === 0) return;
-
-    const directionsService = new google.maps.DirectionsService();
-    
-    crews.forEach((crew, index) => {
-      // For now, assign customers to crews based on index
-      // In a real implementation, this would be based on crew assignments and customer preferences
-      const crewCustomers = customers.filter((_, customerIndex) => 
-        customerIndex % crews.length === index
-      );
-
-      if (crewCustomers.length < 2) {
-        setCrewRoutes(prev => ({ ...prev, [crew.id]: null }));
-        return;
-      }
-
-      const origin = { lat: crewCustomers[0].lat, lng: crewCustomers[0].lng };
-      const destination = {
-        lat: crewCustomers[crewCustomers.length - 1].lat,
-        lng: crewCustomers[crewCustomers.length - 1].lng,
-      };
-      const waypoints = crewCustomers.slice(1, -1).map((customer) => ({
-        location: { lat: customer.lat, lng: customer.lng },
-        stopover: true,
-      }));
-
-      directionsService.route(
-        {
-          origin: origin,
-          destination: destination,
-          waypoints: waypoints,
-          travelMode: google.maps.TravelMode.DRIVING,
-          optimizeWaypoints: true,
-        },
-        (result, status) => {
-          if (status === google.maps.DirectionsStatus.OK && result) {
-            setCrewRoutes(prev => ({ ...prev, [crew.id]: result }));
-          } else {
-            console.error(`Error fetching directions for crew ${crew.name}: ${status}`);
-            setCrewRoutes(prev => ({ ...prev, [crew.id]: null }));
-          }
-        }
-      );
-    });
-  }, [customers, crews, isLoaded]);
 
   if (loadError) {
     return (
@@ -200,27 +102,6 @@ export function ManagerMap({
       options={mapOptions}
       onLoad={(map) => {mapRef.current = map}}
     >
-      {/* Render crew routes with different colors */}
-      {crews.map((crew, index) => {
-        const route = crewRoutes[crew.id];
-        if (!route) return null;
-
-        return (
-          <DirectionsRenderer
-            key={crew.id}
-            directions={route}
-            options={{
-              suppressMarkers: true,
-              polylineOptions: {
-                strokeColor: crewColors[index % crewColors.length],
-                strokeOpacity: 0.8,
-                strokeWeight: 6,
-              },
-            }}
-          />
-        );
-      })}
-
       {/* Customer markers */}
       {customers.map((customer) => (
         <Marker
@@ -239,93 +120,28 @@ export function ManagerMap({
         />
       ))}
 
-      {/* Crew location markers */}
-      {crews.map((crew, index) => {
-        if (!crew.currentLocation) return null;
+      {/* Employee location markers */}
+      {employees.map((employee) => {
+        if (!employee.currentLocation) return null;
 
         return (
           <Marker
-            key={`crew-${crew.id}`}
-            position={{ lat: crew.currentLocation.lat, lng: crew.currentLocation.lng }}
-            title={crew.name}
-            onClick={() => onSelectCrew(crew)}
+            key={`employee-${employee.id}`}
+            position={{ 
+              lat: employee.currentLocation.lat, 
+              lng: employee.currentLocation.lng 
+            }}
+            title={employee.name}
             icon={{
               path: google.maps.SymbolPath.CIRCLE,
-              scale: selectedCrew?.id === crew.id ? 12 : 8,
-              fillColor: crewColors[index % crewColors.length],
-              fillOpacity: 0.9,
-              strokeWeight: 3,
+              scale: 8,
+              fillColor: 'hsl(var(--accent))',
+              fillOpacity: 1,
+              strokeWeight: 2,
               strokeColor: 'white',
             }}
           />
         );
-      })}
-
-      {/* Employee location markers with grouping */}
-      {crews.map((crew, index) => {
-        const activeEmployeesWithLocation = crew.employees.filter(
-          emp => emp.location && emp.status === 'active'
-        )
-        
-        if (activeEmployeesWithLocation.length === 0) return null
-
-        const employeeGroups = groupNearbyEmployees(activeEmployeesWithLocation, 20)
-
-        return employeeGroups.map((group, groupIndex) => {
-          if (!group.centerLocation) return null
-
-          if (group.type === 'group') {
-            // Render grouped employees
-            return (
-              <Marker
-                key={`group-${crew.id}-${groupIndex}`}
-                position={group.centerLocation}
-                title={`${group.employees.length} employees from ${crew.name}`}
-                icon={{
-                  path: google.maps.SymbolPath.CIRCLE,
-                  scale: 8 + (group.employees.length * 2), // Larger circle for groups
-                  fillColor: crewColors[index % crewColors.length],
-                  fillOpacity: 0.8,
-                  strokeWeight: 3,
-                  strokeColor: 'white',
-                }}
-                onClick={() => {
-                  // Show info window with employee names
-                  const infoWindow = new google.maps.InfoWindow({
-                    content: `
-                      <div style="padding: 8px;">
-                        <h3 style="margin: 0 0 8px 0; font-size: 14px;">${crew.name} - ${group.employees.length} employees</h3>
-                        <ul style="margin: 0; padding-left: 16px;">
-                          ${group.employees.map(emp => `<li>${emp.name} (${emp.role})</li>`).join('')}
-                        </ul>
-                      </div>
-                    `
-                  })
-                  infoWindow.setPosition(group.centerLocation)
-                  infoWindow.open(mapRef.current)
-                }}
-              />
-            )
-          } else {
-            // Render individual employee
-            const employee = group.employees[0]
-            return (
-              <Marker
-                key={`emp-${employee.id}`}
-                position={group.centerLocation}
-                title={`${employee.name} (${crew.name})`}
-                icon={{
-                  path: google.maps.SymbolPath.CIRCLE,
-                  scale: 6,
-                  fillColor: crewColors[index % crewColors.length],
-                  fillOpacity: 0.7,
-                  strokeWeight: 2,
-                  strokeColor: 'white',
-                }}
-              />
-            )
-          }
-        })
       })}
     </GoogleMap>
   )

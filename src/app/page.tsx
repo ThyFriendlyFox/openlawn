@@ -107,9 +107,15 @@ export default function LawnRoutePage() {
     coordinates?: { lat?: number; lng?: number };
     notes?: string;
     serviceType: 'push-mow' | 'edge' | 'blow' | 'detail' | 'riding-mow';
-    serviceDescription: string;
-    servicePrice: number;
-    scheduledDate?: string;
+    servicePreferences: {
+      preferredDays: string[];
+      preferredTimeRange: {
+        start: string;
+        end: string;
+      };
+      serviceFrequency: 'weekly' | 'biweekly' | 'monthly' | 'one-time';
+      specialInstructions?: string;
+    };
   }) => {
     if (!user) return;
 
@@ -124,19 +130,15 @@ export default function LawnRoutePage() {
       services: [{
         id: Date.now().toString(),
         type: newCustomerData.serviceType,
-        description: newCustomerData.serviceDescription,
-        price: newCustomerData.servicePrice,
-        scheduledDate: newCustomerData.scheduledDate ? 
-          Timestamp.fromDate(new Date(newCustomerData.scheduledDate)) : 
-          Timestamp.now(),
+        description: newCustomerData.servicePreferences.specialInstructions || '',
+        price: 0, // Default price since it's not in the new form
+        scheduledDate: Timestamp.now(),
         status: 'scheduled' as const,
         notes: '',
         photos: [],
       }],
       lastServiceDate: undefined,
-      nextServiceDate: newCustomerData.scheduledDate ? 
-        Timestamp.fromDate(new Date(newCustomerData.scheduledDate)) : 
-        undefined,
+      nextServiceDate: undefined,
       createdBy: user.uid,
     });
 
@@ -210,6 +212,15 @@ export default function LawnRoutePage() {
           </h2>
         </div>
         
+        {/* Add New Customer Card - Now at the top */}
+        <div
+          onClick={handleOpenAddSheet}
+          className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
+        >
+          <Plus className="w-10 h-10 mb-2" />
+          <p className="font-semibold">Add New Customer</p>
+        </div>
+        
         <div className="space-y-2">
           {customers.map((customer) => (
             <div
@@ -226,15 +237,6 @@ export default function LawnRoutePage() {
               )}
             </div>
           ))}
-          
-          {/* Add New Customer Card */}
-          <div
-            onClick={handleOpenAddSheet}
-            className="p-6 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
-          >
-            <Plus className="w-10 h-10 mb-2" />
-            <p className="font-semibold">Add New Customer</p>
-          </div>
         </div>
       </div>
     );

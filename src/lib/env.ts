@@ -66,6 +66,11 @@ const isMobile = () => {
          /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
+// Check if we're in a build environment (SSR/SSG)
+const isBuildEnvironment = () => {
+  return typeof window === 'undefined' && process.env.NODE_ENV === 'production';
+};
+
 export const env = isMobile() ? getMobileConfig() : getWebConfig();
 
 // Debug logging in development
@@ -87,4 +92,9 @@ if (process.env.NODE_ENV === 'development') {
 // Export individual configs for convenience
 export const firebaseConfig = env.firebase;
 export const googleMapsConfig = env.googleMaps;
-export const googleAIConfig = env.googleAI; 
+export const googleAIConfig = env.googleAI;
+
+// Helper function to check if Firebase is properly configured
+export const isFirebaseConfigured = () => {
+  return !!(firebaseConfig.apiKey && firebaseConfig.projectId);
+}; 

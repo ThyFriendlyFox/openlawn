@@ -8,9 +8,8 @@ import {
   User as FirebaseUser,
   UserCredential
 } from 'firebase/auth';
-import { auth } from './firebase';
+import { getFirebaseAuth, getFirebaseDb } from './firebase';
 import { doc, setDoc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from './firebase';
 import type { User } from './firebase-types';
 
 // Authentication state interface
@@ -23,6 +22,11 @@ export interface AuthState {
 
 // Create user profile in Firestore
 const createUserProfile = async (user: FirebaseUser, additionalData?: Partial<User>): Promise<void> => {
+  const db = getFirebaseDb();
+  if (!db) {
+    throw new Error('Firebase database not initialized');
+  }
+
   const userProfile: Omit<User, 'id' | 'createdAt' | 'updatedAt'> = {
     name: user.displayName || '',
     email: user.email || '',
@@ -44,6 +48,11 @@ const createUserProfile = async (user: FirebaseUser, additionalData?: Partial<Us
 
 // Update user profile (creates if doesn't exist)
 export const updateUserProfile = async (uid: string, updates: Partial<User>): Promise<void> => {
+  const db = getFirebaseDb();
+  if (!db) {
+    throw new Error('Firebase database not initialized');
+  }
+
   const userRef = doc(db, 'users', uid);
   
   // Check if document exists
@@ -79,6 +88,12 @@ export const updateUserProfile = async (uid: string, updates: Partial<User>): Pr
 // Get user profile from Firestore
 export const getUserProfile = async (uid: string): Promise<User | null> => {
   try {
+    const db = getFirebaseDb();
+    if (!db) {
+      console.error('Firebase database not initialized');
+      return null;
+    }
+
     const userDoc = await getDoc(doc(db, 'users', uid));
     if (userDoc.exists()) {
       const data = userDoc.data();
@@ -111,6 +126,11 @@ export const signUpWithEmail = async (
   role?: 'employee' | 'manager' | 'admin'
 ): Promise<UserCredential> => {
   try {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      throw new Error('Firebase auth not initialized');
+    }
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     
     // Update display name if provided
@@ -134,6 +154,11 @@ export const signUpWithEmail = async (
 // Sign in with email and password
 export const signInWithEmail = async (email: string, password: string): Promise<UserCredential> => {
   try {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      throw new Error('Firebase auth not initialized');
+    }
+
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     
     // Update or create user profile
@@ -152,6 +177,11 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 // Sign out
 export const signOutUser = async (): Promise<void> => {
   try {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      throw new Error('Firebase auth not initialized');
+    }
+
     await signOut(auth);
   } catch (error) {
     console.error('Error signing out:', error);
@@ -162,6 +192,11 @@ export const signOutUser = async (): Promise<void> => {
 // Reset password
 export const resetPassword = async (email: string): Promise<void> => {
   try {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      throw new Error('Firebase auth not initialized');
+    }
+
     await sendPasswordResetEmail(auth, email);
   } catch (error) {
     console.error('Error sending password reset email:', error);
@@ -171,17 +206,26 @@ export const resetPassword = async (email: string): Promise<void> => {
 
 // Get current user
 export const getCurrentUser = (): FirebaseUser | null => {
-  return auth.currentUser;
+  const auth = getFirebaseAuth();
+  return auth?.currentUser || null;
 };
 
 // Listen to authentication state changes
 export const onAuthStateChange = (callback: (user: FirebaseUser | null) => void): (() => void) => {
+  const auth = getFirebaseAuth();
+  if (!auth) {
+    console.error('Firebase auth not initialized, cannot listen to auth state changes');
+    // Return a no-op unsubscribe function
+    return () => {};
+  }
+
   return onAuthStateChanged(auth, callback);
 };
 
 // Check if user is authenticated
 export const isAuthenticated = (): boolean => {
-  return !!auth.currentUser;
+  const auth = getFirebaseAuth();
+  return !!auth?.currentUser;
 };
 
 // Get authentication error message

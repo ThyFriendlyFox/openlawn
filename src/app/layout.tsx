@@ -3,6 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/hooks/use-auth"
 import { RoleBasedRouter } from "@/components/auth/RoleBasedRouter"
+import { EnvCheck } from "@/components/ui/env-check"
+import { FirebaseTest } from "@/components/ui/firebase-test"
 
 export const metadata: Metadata = {
   title: 'LawnRoute',
@@ -27,6 +29,8 @@ export default function RootLayout({
             {children}
           </RoleBasedRouter>
           <Toaster />
+          <EnvCheck />
+          <FirebaseTest />
         </AuthProvider>
       </body>
     </html>

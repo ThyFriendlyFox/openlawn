@@ -45,38 +45,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChange(async (user: FirebaseUser | null) => {
-      if (user) {
-        // User is signed in
-        try {
-          const userProfile = await getUserProfile(user.uid);
+    let unsubscribe: (() => void) | undefined;
+
+    try {
+      unsubscribe = onAuthStateChange(async (user: FirebaseUser | null) => {
+        if (user) {
+          // User is signed in
+          try {
+            const userProfile = await getUserProfile(user.uid);
+            setAuthState({
+              user,
+              userProfile,
+              loading: false,
+              error: null,
+            });
+          } catch (error) {
+            console.error('Error fetching user profile:', error);
+            setAuthState({
+              user,
+              userProfile: null,
+              loading: false,
+              error: 'Failed to load user profile',
+            });
+          }
+        } else {
+          // User is signed out
           setAuthState({
-            user,
-            userProfile,
+            user: null,
+            userProfile: null,
             loading: false,
             error: null,
           });
-        } catch (error) {
-          console.error('Error fetching user profile:', error);
-          setAuthState({
-            user,
-            userProfile: null,
-            loading: false,
-            error: 'Failed to load user profile',
-          });
         }
-      } else {
-        // User is signed out
-        setAuthState({
-          user: null,
-          userProfile: null,
-          loading: false,
-          error: null,
-        });
-      }
-    });
+      });
+    } catch (error) {
+      console.error('Error setting up auth state listener:', error);
+      setAuthState({
+        user: null,
+        userProfile: null,
+        loading: false,
+        error: 'Failed to initialize authentication',
+      });
+    }
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

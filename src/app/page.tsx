@@ -73,7 +73,7 @@ export default function LawnRoutePage() {
       else if (currentView === 'crews') setCurrentView('employees')
     }
   }
-
+  
   // Subscribe to customers and employees when user is authenticated
   React.useEffect(() => {
     if (!user) return;
@@ -108,12 +108,12 @@ export default function LawnRoutePage() {
     notes?: string;
     serviceType: 'push-mow' | 'edge' | 'blow' | 'detail' | 'riding-mow';
     servicePreferences: {
-      preferredDays: string[];
+    preferredDays: string[];
       preferredTimeRange: {
         start: string;
         end: string;
       };
-      serviceFrequency: 'weekly' | 'biweekly' | 'monthly' | 'one-time';
+    serviceFrequency: 'weekly' | 'biweekly' | 'monthly' | 'one-time';
       specialInstructions?: string;
     };
   }) => {
@@ -149,19 +149,19 @@ export default function LawnRoutePage() {
         lat = newCustomerData.coordinates.lat;
         lng = newCustomerData.coordinates.lng;
       } else {
-        // Use Google Maps Geocoding API to get real coordinates from the address
-        const geocoder = new google.maps.Geocoder();
-        const result = await geocoder.geocode({ address: newCustomerData.address });
-        
-        if (result.results.length > 0) {
-          const location = result.results[0].geometry.location;
-          lat = location.lat();
-          lng = location.lng();
-        } else {
-          // Fallback to Florida coordinates if geocoding fails
-          console.warn('Geocoding failed, using fallback coordinates')
-          lat = 27.6648 + (Math.random() - 0.5) * 2;
-          lng = -81.5158 + (Math.random() - 0.5) * 2;
+      // Use Google Maps Geocoding API to get real coordinates from the address
+      const geocoder = new google.maps.Geocoder();
+      const result = await geocoder.geocode({ address: newCustomerData.address });
+      
+      if (result.results.length > 0) {
+        const location = result.results[0].geometry.location;
+        lat = location.lat();
+        lng = location.lng();
+      } else {
+        // Fallback to Florida coordinates if geocoding fails
+        console.warn('Geocoding failed, using fallback coordinates')
+        lat = 27.6648 + (Math.random() - 0.5) * 2;
+        lng = -81.5158 + (Math.random() - 0.5) * 2;
         }
       }
 

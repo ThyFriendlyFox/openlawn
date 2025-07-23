@@ -248,7 +248,6 @@ export const updateServiceForCustomer = async (
     if (!customerDoc.exists()) {
       throw new Error('Customer not found');
     }
-    
     const customerData = customerDoc.data();
     const services = customerData.services || [];
     const serviceIndex = services.findIndex((s: Service) => s.id === serviceId);
@@ -258,7 +257,6 @@ export const updateServiceForCustomer = async (
     }
     
     services[serviceIndex] = { ...services[serviceIndex], ...updates };
-    
     await updateDoc(customerRef, {
       services,
       updatedAt: Timestamp.now(),
@@ -288,7 +286,7 @@ export const removeServiceFromCustomer = async (
     
     await updateDoc(customerRef, {
       services: filteredServices,
-      updatedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
     });
   } catch (error) {
     console.error('Error removing service from customer:', error);

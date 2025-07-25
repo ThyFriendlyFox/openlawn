@@ -1,367 +1,271 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  addDoc,
-  updateDoc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  Timestamp,
-  QuerySnapshot,
-  DocumentData,
-} from 'firebase/firestore';
-import { db } from './firebase';
-import type { Route, RouteStop, Schedule, Customer } from './types';
+import { Timestamp } from 'firebase/firestore';
+import type { 
+  Customer, 
+  CustomerPriority, 
+  CrewAvailability, 
+  DailyRoute, 
+  User,
+  DayOfWeek 
+} from './firebase-types';
+import { calculateCustomerPriorities, getCustomersNeedingService } from './customer-service';
+import { getUsers, getUsersByRole } from './user-service';
 
-// Firestore interfaces
-export interface FirestoreRoute {
-  id?: string;
-  scheduleId: string;
-  crewId: string;
-  date: Timestamp;
-  stops: FirestoreRouteStop[];
-  totalDistance: number;
-  totalDuration: number;
-  optimizedAt: Timestamp;
-  status: 'draft' | 'optimized' | 'active' | 'completed';
-}
+// Route cache for daily routes
+const routeCache = new Map<string, DailyRoute>();
 
-export interface FirestoreRouteStop {
-  customerId: string;
-  customerName: string;
-  address: string;
-  lat: number;
-  lng: number;
-  sequence: number;
-  estimatedArrival: string;
-  estimatedDuration: number;
-  serviceType: string;
-  priority: 'high' | 'medium' | 'low';
-  status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
-}
+// Get available crews for a specific date
+export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]> => {
+  const users = await getUsers();
+  const foremen = users.filter(user => user.role === 'foreman' && user.status === 'available');
+  const technicians = users.filter(user => user.role === 'technician' && user.status === 'available');
+  
+  return foremen.map(foreman => {
+    const assignedTechnicians = technicians.filter(tech => tech.assignedForeman === foreman.id);
+    
+    return {
+      crewId: foreman.crewId || `crew-${foreman.id}`,
+      foremanId: foreman.id,
+      technicianIds: assignedTechnicians.map(tech => tech.id),
+      availability: {
+        date,
+        startTime: foreman.schedule?.[getDayOfWeek(date)]?.start || '08:00',
+        endTime: foreman.schedule?.[getDayOfWeek(date)]?.end || '17:00',
+        maxCustomers: 12,
+        currentLocation: foreman.currentLocation ? {
+          lat: foreman.currentLocation.lat,
+          lng: foreman.currentLocation.lng
+        } : undefined,
+      },
+      capabilities: foreman.capabilities || ['general'],
+      region: foreman.region || 'default',
+    };
+  });
+};
 
-// Convert Firestore data to Route type
-const convertFirestoreRoute = (doc: any): Route => {
-  const data = doc.data();
+// Get day of week as string
+const getDayOfWeek = (date: Date): DayOfWeek => {
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  return days[date.getDay()] as DayOfWeek;
+};
+
+// Geographic clustering by zip code
+export const clusterByZipCode = (customers: CustomerPriority[]): Map<string, CustomerPriority[]> => {
+  const clusters = new Map<string, CustomerPriority[]>();
+  
+  customers.forEach(customer => {
+    const zipCode = customer.factors.location.zipCode;
+    if (!clusters.has(zipCode)) {
+      clusters.set(zipCode, []);
+    }
+    clusters.get(zipCode)!.push(customer);
+  });
+  
+  return clusters;
+};
+
+// Assign clusters to crews based on region
+export const assignClustersToCrews = (
+  clusters: Map<string, CustomerPriority[]>,
+  crews: CrewAvailability[]
+): Array<{ crew: CrewAvailability; customers: CustomerPriority[] }> => {
+  const assignments: Array<{ crew: CrewAvailability; customers: CustomerPriority[] }> = [];
+  
+  // Simple assignment: assign clusters to crews based on region matching
+  clusters.forEach((customers, zipCode) => {
+    // Find crew in same region or assign to first available crew
+    const matchingCrew = crews.find(crew => crew.region === zipCode) || crews[0];
+    
+    if (matchingCrew) {
+      assignments.push({
+        crew: matchingCrew,
+        customers: customers.sort((a, b) => b.priority - a.priority)
+      });
+    }
+  });
+  
+  return assignments;
+};
+
+// Optimize route for a crew using Google Maps Distance Matrix API
+export const optimizeRouteForCrew = async (
+  crew: CrewAvailability,
+  customers: CustomerPriority[],
+  date: Date
+): Promise<DailyRoute> => {
+  // Get full customer data
+  const customerData = await Promise.all(
+    customers.map(async (customerPriority) => {
+      const response = await fetch(`/api/customers/${customerPriority.customerId}`);
+      return response.json();
+    })
+  );
+  
+  // Simple route optimization (can be enhanced with Google Maps API)
+  const optimizedPath = customerData.map(customer => ({
+    lat: customer.lat,
+    lng: customer.lng
+  }));
+  
+  // Calculate estimated duration (30 minutes per customer + travel time)
+  const estimatedDuration = customerData.length * 30; // minutes
+  
+  // Calculate total distance (simplified)
+  let totalDistance = 0;
+  for (let i = 1; i < optimizedPath.length; i++) {
+    const prev = optimizedPath[i - 1];
+    const curr = optimizedPath[i];
+    totalDistance += calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
+  }
+  
   return {
-    id: doc.id,
-    scheduleId: data.scheduleId,
-    crewId: data.crewId,
-    date: data.date.toDate(),
-    stops: data.stops.map((stop: FirestoreRouteStop) => ({
-      customerId: stop.customerId,
-      customerName: stop.customerName,
-      address: stop.address,
-      lat: stop.lat,
-      lng: stop.lng,
-      sequence: stop.sequence,
-      estimatedArrival: stop.estimatedArrival,
-      estimatedDuration: stop.estimatedDuration,
-      serviceType: stop.serviceType,
-      priority: stop.priority,
-      status: stop.status,
-    })),
-    totalDistance: data.totalDistance,
-    totalDuration: data.totalDuration,
-    optimizedAt: data.optimizedAt.toDate(),
-    status: data.status,
+    crewId: crew.crewId,
+    date,
+    customers: customerData,
+    optimizedPath,
+    estimatedDuration,
+    totalDistance,
   };
 };
 
-// Convert Route type to Firestore data
-const convertToFirestoreRoute = (route: Omit<Route, 'id' | 'optimizedAt'>): Omit<FirestoreRoute, 'id'> => {
-  return {
-    scheduleId: route.scheduleId,
-    crewId: route.crewId,
-    date: Timestamp.fromDate(route.date),
-    stops: route.stops.map(stop => ({
-      customerId: stop.customerId,
-      customerName: stop.customerName,
-      address: stop.address,
-      lat: stop.lat,
-      lng: stop.lng,
-      sequence: stop.sequence,
-      estimatedArrival: stop.estimatedArrival,
-      estimatedDuration: stop.estimatedDuration,
-      serviceType: stop.serviceType,
-      priority: stop.priority,
-      status: stop.status,
-    })),
-    totalDistance: route.totalDistance,
-    totalDuration: route.totalDuration,
-    optimizedAt: Timestamp.now(),
-    status: route.status,
-  };
-};
-
-// Calculate distance between two points using Haversine formula
+// Calculate distance between two points (Haversine formula)
 const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) *
-    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const R = 3959; // Earth's radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
   return R * c;
 };
 
-// Simple route optimization using nearest neighbor algorithm
-const optimizeRoute = (customers: Customer[], startLocation?: { lat: number; lng: number }): RouteStop[] => {
-  if (customers.length === 0) return [];
-
-  const stops: RouteStop[] = [];
-  const unvisited = [...customers];
+// Generate optimal routes for a specific date
+export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> => {
+  // Step 1: Calculate customer priorities
+  const customerPriorities = await calculateCustomerPriorities(date);
   
-  // Start from the first customer or a default location
-  let currentLocation = startLocation || {
-    lat: unvisited[0].lat,
-    lng: unvisited[0].lng
-  };
-
-  while (unvisited.length > 0) {
-    let nearestIndex = 0;
-    let minDistance = Infinity;
-
-    // Find the nearest unvisited customer
-    for (let i = 0; i < unvisited.length; i++) {
-      const distance = calculateDistance(
-        currentLocation.lat,
-        currentLocation.lng,
-        unvisited[i].lat,
-        unvisited[i].lng
-      );
+  // Step 2: Get available crews
+  const availableCrews = await getAvailableCrews(date);
+  
+  if (availableCrews.length === 0) {
+    return [];
+  }
+  
+  // Step 3: Geographic clustering by zip code
+  const clusters = clusterByZipCode(customerPriorities);
+  
+  // Step 4: Assign clusters to crews
+  const crewAssignments = assignClustersToCrews(clusters, availableCrews);
+  
+  // Step 5: Optimize each crew's route
+  const routes = await Promise.all(
+    crewAssignments.map(async (assignment) => {
+      const prioritizedCustomers = assignment.customers.slice(0, 12); // Max 12 customers
       
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestIndex = i;
-      }
-    }
-
-    const nearestCustomer = unvisited[nearestIndex];
-    
-    // Create route stop
-    const stop: RouteStop = {
-      customerId: nearestCustomer.id,
-      customerName: nearestCustomer.name,
-      address: nearestCustomer.address,
-      lat: nearestCustomer.lat,
-      lng: nearestCustomer.lng,
-      sequence: stops.length + 1,
-      estimatedArrival: '09:00', // This should be calculated based on previous stops
-      estimatedDuration: 30, // Default 30 minutes per customer
-      serviceType: nearestCustomer.serviceRequested,
-      priority: 'medium',
-      status: 'pending',
-    };
-
-    stops.push(stop);
-    
-    // Update current location and remove visited customer
-    currentLocation = { lat: nearestCustomer.lat, lng: nearestCustomer.lng };
-    unvisited.splice(nearestIndex, 1);
-  }
-
-  return stops;
-};
-
-// Get route for a schedule
-export const getRouteForSchedule = async (scheduleId: string): Promise<Route | null> => {
-  try {
-    const routesRef = collection(db, 'routes');
-    const q = query(
-      routesRef,
-      where('scheduleId', '==', scheduleId)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      return convertFirestoreRoute(querySnapshot.docs[0]);
-    }
-    return null;
-  } catch (error) {
-    console.error('Error fetching route for schedule:', error);
-    throw error;
-  }
-};
-
-// Get route for a specific date
-export const getRouteByDate = async (crewId: string, date: Date): Promise<Route | null> => {
-  try {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const routesRef = collection(db, 'routes');
-    const q = query(
-      routesRef,
-      where('crewId', '==', crewId),
-      where('date', '>=', Timestamp.fromDate(startOfDay)),
-      where('date', '<=', Timestamp.fromDate(endOfDay))
-    );
-    
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      return convertFirestoreRoute(querySnapshot.docs[0]);
-    }
-    return null;
-  } catch (error) {
-    console.error('Error fetching route by date:', error);
-    throw error;
-  }
-};
-
-// Create optimized route from schedule
-export const createOptimizedRoute = async (
-  schedule: Schedule,
-  customers: Customer[]
-): Promise<string> => {
-  try {
-    // Get customers from the schedule
-    const scheduleCustomers = customers.filter(customer =>
-      schedule.assignedCustomers.some(assigned => assigned.customerId === customer.id)
-    );
-
-    // Optimize the route
-    const optimizedStops = optimizeRoute(scheduleCustomers);
-
-    // Calculate total distance and duration
-    let totalDistance = 0;
-    let totalDuration = 0;
-
-    for (let i = 1; i < optimizedStops.length; i++) {
-      const prevStop = optimizedStops[i - 1];
-      const currentStop = optimizedStops[i];
-      
-      const distance = calculateDistance(
-        prevStop.lat,
-        prevStop.lng,
-        currentStop.lat,
-        currentStop.lng
+      return await optimizeRouteForCrew(
+        assignment.crew,
+        prioritizedCustomers,
+        date
       );
-      
-      totalDistance += distance;
-      totalDuration += currentStop.estimatedDuration;
-    }
-
-    // Create route document
-    const route: Omit<Route, 'id' | 'optimizedAt'> = {
-      scheduleId: schedule.id,
-      crewId: schedule.crewId,
-      date: schedule.date,
-      stops: optimizedStops,
-      totalDistance,
-      totalDuration,
-      status: 'optimized',
-    };
-
-    const firestoreRoute = convertToFirestoreRoute(route);
-    const docRef = await addDoc(collection(db, 'routes'), firestoreRoute);
-    
-    return docRef.id;
-  } catch (error) {
-    console.error('Error creating optimized route:', error);
-    throw error;
-  }
-};
-
-// Update route status
-export const updateRouteStatus = async (routeId: string, status: Route['status']): Promise<void> => {
-  try {
-    const routeRef = doc(db, 'routes', routeId);
-    await updateDoc(routeRef, {
-      status,
-      optimizedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error updating route status:', error);
-    throw error;
-  }
-};
-
-// Update stop status
-export const updateStopStatus = async (
-  routeId: string,
-  customerId: string,
-  status: RouteStop['status']
-): Promise<void> => {
-  try {
-    const routeRef = doc(db, 'routes', routeId);
-    const routeDoc = await getDoc(routeRef);
-    
-    if (!routeDoc.exists()) {
-      throw new Error('Route not found');
-    }
-
-    const routeData = routeDoc.data();
-    const updatedStops = routeData.stops.map((stop: FirestoreRouteStop) => {
-      if (stop.customerId === customerId) {
-        return { ...stop, status };
-      }
-      return stop;
-    });
-    
-    await updateDoc(routeRef, {
-      stops: updatedStops,
-      optimizedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error updating stop status:', error);
-    throw error;
-  }
-};
-
-// Get routes for a crew
-export const getCrewRoutes = async (crewId: string, startDate?: Date, endDate?: Date): Promise<Route[]> => {
-  try {
-    const routesRef = collection(db, 'routes');
-    let q = query(
-      routesRef,
-      where('crewId', '==', crewId),
-      orderBy('date', 'asc')
-    );
-
-    if (startDate && endDate) {
-      q = query(
-        routesRef,
-        where('crewId', '==', crewId),
-        where('date', '>=', Timestamp.fromDate(startDate)),
-        where('date', '<=', Timestamp.fromDate(endDate)),
-        orderBy('date', 'asc')
-      );
-    }
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(convertFirestoreRoute);
-  } catch (error) {
-    console.error('Error fetching crew routes:', error);
-    throw error;
-  }
-};
-
-// Listen to routes in real-time
-export const subscribeToRoutes = (
-  crewId: string,
-  callback: (routes: Route[]) => void
-): (() => void) => {
-  const routesRef = collection(db, 'routes');
-  const q = query(
-    routesRef,
-    where('crewId', '==', crewId),
-    orderBy('date', 'asc')
+    })
   );
+  
+  return routes;
+};
 
-  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const routes = querySnapshot.docs.map(convertFirestoreRoute);
-    callback(routes);
+// Get cached route for a crew on a specific date
+export const getCachedRoute = async (crewId: string, date: Date): Promise<DailyRoute | null> => {
+  const cacheKey = `${crewId}-${date.toISOString().split('T')[0]}`;
+  
+  if (routeCache.has(cacheKey)) {
+    return routeCache.get(cacheKey)!;
+  }
+  
+  // Generate new route
+  const routes = await generateOptimalRoutes(date);
+  const crewRoute = routes.find(route => route.crewId === crewId);
+  
+  if (crewRoute) {
+    routeCache.set(cacheKey, crewRoute);
+    return crewRoute;
+  }
+  
+  return null;
+};
+
+// Clear route cache (useful for testing or when routes need to be regenerated)
+export const clearRouteCache = (): void => {
+  routeCache.clear();
+};
+
+// Update route for traffic changes
+export const updateRouteForTraffic = async (
+  crewId: string, 
+  currentLocation: { lat: number; lng: number }
+): Promise<DailyRoute | null> => {
+  const today = new Date();
+  const existingRoute = await getCachedRoute(crewId, today);
+  
+  if (!existingRoute) {
+    return null;
+  }
+  
+  // Re-optimize route with current location
+  const remainingCustomers = existingRoute.customers.filter(customer => 
+    !customer.services.some(service => service.status === 'completed')
+  );
+  
+  if (remainingCustomers.length === 0) {
+    return existingRoute;
+  }
+  
+  // Create new crew availability with current location
+  const crew: CrewAvailability = {
+    crewId: existingRoute.crewId,
+    foremanId: '', // Will be filled by the optimization function
+    technicianIds: [],
+    availability: {
+      date: today,
+      startTime: '08:00',
+      endTime: '17:00',
+      maxCustomers: 12,
+      currentLocation,
+    },
+    capabilities: ['general'],
+    region: 'default',
+  };
+  
+  // Re-optimize route
+  const customerPriorities = remainingCustomers.map(customer => ({
+    customerId: customer.id,
+    priority: 100, // High priority for remaining customers
+    factors: {
+      daysSinceLastService: 0,
+      customerPreferences: customer.servicePreferences,
+      serviceType: customer.services[0]?.type || 'general',
+      location: { lat: customer.lat, lng: customer.lng, zipCode: '' },
+    },
+  }));
+  
+  const updatedRoute = await optimizeRouteForCrew(crew, customerPriorities, today);
+  
+  // Update cache
+  const cacheKey = `${crewId}-${today.toISOString().split('T')[0]}`;
+  routeCache.set(cacheKey, updatedRoute);
+  
+  return updatedRoute;
+};
+
+// Get all routes for a specific date
+export const getAllRoutesForDate = async (date: Date): Promise<DailyRoute[]> => {
+  const routes = await generateOptimalRoutes(date);
+  
+  // Cache all routes
+  routes.forEach(route => {
+    const cacheKey = `${route.crewId}-${date.toISOString().split('T')[0]}`;
+    routeCache.set(cacheKey, route);
   });
+  
+  return routes;
 }; 

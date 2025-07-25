@@ -1,58 +1,52 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  onSnapshot,
-  Timestamp,
-  writeBatch,
-  QuerySnapshot,
+import { 
+  collection, 
+  doc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  getDocs, 
+  getDoc, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot, 
+  QuerySnapshot, 
   DocumentData,
+  Timestamp,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Customer, Service } from './firebase-types';
+import type { Customer, Service, ServiceRecord, DayOfWeek, CustomerPriority } from './firebase-types';
 
-// Convert Firestore data to Customer type
-const convertFirestoreCustomer = (doc: any): Customer => {
+// Convert Firestore document to Customer
+const convertFirestoreCustomer = (doc: DocumentData): Customer => {
   const data = doc.data();
   return {
     id: doc.id,
-    name: data.name,
-    address: data.address,
-    lat: data.lat,
-    lng: data.lng,
-    notes: data.notes,
+    name: data.name || '',
+    address: data.address || '',
+    lat: data.lat || 0,
+    lng: data.lng || 0,
+    notes: data.notes || '',
     billingInfo: data.billingInfo || {},
     status: data.status || 'active',
-    services: data.services?.map((service: any) => ({
-      id: service.id,
-      type: service.type,
-      description: service.description,
-      price: service.price,
-      scheduledDate: service.scheduledDate,
-      completedDate: service.completedDate,
-      status: service.status,
-      notes: service.notes,
-      photos: service.photos || [],
-      assignedCrew: service.assignedCrew,
-    })) || [],
+    services: data.services || [],
     lastServiceDate: data.lastServiceDate,
     nextServiceDate: data.nextServiceDate,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-    createdBy: data.createdBy,
+    createdBy: data.createdBy || '',
+    servicePreferences: data.servicePreferences || {
+      preferredDays: [],
+      preferredTimeRange: { start: '08:00', end: '17:00' },
+      serviceFrequency: 7
+    },
+    serviceHistory: data.serviceHistory || [],
+    createdAt: data.createdAt || Timestamp.now(),
+    updatedAt: data.updatedAt || Timestamp.now(),
   };
 };
 
-// Convert Customer type to Firestore data
-const convertToFirestoreCustomer = (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>, userId: string): Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> => {
+// Convert Customer to Firestore document
+const convertToFirestoreCustomer = (customer: Customer) => {
   return {
     name: customer.name,
     address: customer.address,
@@ -60,236 +54,222 @@ const convertToFirestoreCustomer = (customer: Omit<Customer, 'id' | 'createdAt' 
     lng: customer.lng,
     notes: customer.notes,
     billingInfo: customer.billingInfo,
-    status: customer.status || 'active',
-    services: customer.services || [],
+    status: customer.status,
+    services: customer.services,
     lastServiceDate: customer.lastServiceDate,
     nextServiceDate: customer.nextServiceDate,
-    createdBy: userId,
+    createdBy: customer.createdBy,
+    servicePreferences: customer.servicePreferences,
+    serviceHistory: customer.serviceHistory,
+    updatedAt: serverTimestamp(),
   };
 };
 
 // Get all customers
-export const getCustomers = async (userId: string): Promise<Customer[]> => {
-  try {
-    const customersRef = collection(db, 'customers');
-    const q = query(
-      customersRef,
-      where('createdBy', '==', userId),
-      where('status', '==', 'active')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    const customers = querySnapshot.docs.map(convertFirestoreCustomer);
-    
-    return customers.sort((a, b) => a.name.localeCompare(b.name));
-  } catch (error) {
-    console.error('Error fetching customers:', error);
-    throw error;
-  }
+export const getCustomers = async (): Promise<Customer[]> => {
+  const customersRef = collection(db, 'customers');
+  const querySnapshot = await getDocs(customersRef);
+  return querySnapshot.docs.map(convertFirestoreCustomer);
+};
+
+// Get customers by user (created by)
+export const getCustomersByUser = async (userId: string): Promise<Customer[]> => {
+  const customersRef = collection(db, 'customers');
+  const q = query(customersRef, where('createdBy', '==', userId));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(convertFirestoreCustomer);
 };
 
 // Get a single customer
-export const getCustomer = async (customerId: string): Promise<Customer | null> => {
-  try {
-    const customerDoc = await getDoc(doc(db, 'customers', customerId));
-    if (customerDoc.exists()) {
-      return convertFirestoreCustomer(customerDoc);
-    }
-    return null;
-  } catch (error) {
-    console.error('Error fetching customer:', error);
-    throw error;
+export const getCustomer = async (id: string): Promise<Customer | null> => {
+  const customerRef = doc(db, 'customers', id);
+  const customerSnap = await getDoc(customerRef);
+  
+  if (customerSnap.exists()) {
+    return convertFirestoreCustomer(customerSnap);
   }
+  return null;
 };
 
 // Add a new customer
-export const addCustomer = async (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>, userId: string): Promise<string> => {
-  try {
-    const firestoreCustomer = convertToFirestoreCustomer(customer, userId);
-    const docRef = await addDoc(collection(db, 'customers'), {
-      ...firestoreCustomer,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
-    return docRef.id;
-  } catch (error) {
-    console.error('Error adding customer:', error);
-    throw error;
-  }
+export const addCustomer = async (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  const customersRef = collection(db, 'customers');
+  const docRef = await addDoc(customersRef, convertToFirestoreCustomer(customer as Customer));
+  return docRef.id;
 };
 
 // Update a customer
-export const updateCustomer = async (customerId: string, updates: Partial<Customer>): Promise<void> => {
-  try {
-    const customerRef = doc(db, 'customers', customerId);
-    await updateDoc(customerRef, {
-      ...updates,
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error updating customer:', error);
-    throw error;
-  }
+export const updateCustomer = async (id: string, updates: Partial<Customer>): Promise<void> => {
+  const customerRef = doc(db, 'customers', id);
+  await updateDoc(customerRef, {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
 };
 
-// Delete a customer (soft delete)
-export const deleteCustomer = async (customerId: string): Promise<void> => {
-  try {
-    const customerRef = doc(db, 'customers', customerId);
-    await updateDoc(customerRef, {
-      status: 'inactive',
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error deleting customer:', error);
-    throw error;
-  }
+// Delete a customer
+export const deleteCustomer = async (id: string): Promise<void> => {
+  const customerRef = doc(db, 'customers', id);
+  await deleteDoc(customerRef);
 };
 
-// Hard delete a customer
-export const hardDeleteCustomer = async (customerId: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, 'customers', customerId));
-  } catch (error) {
-    console.error('Error hard deleting customer:', error);
-    throw error;
-  }
-};
-
-// Listen to customers in real-time
+// Subscribe to customers
 export const subscribeToCustomers = (
+  callback: (customers: Customer[]) => void
+): (() => void) => {
+  const customersRef = collection(db, 'customers');
+  const q = query(customersRef, orderBy('name'));
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const customers = querySnapshot.docs.map(convertFirestoreCustomer);
+    callback(customers);
+  });
+};
+
+// Subscribe to customers by user
+export const subscribeToCustomersByUser = (
   userId: string,
   callback: (customers: Customer[]) => void
 ): (() => void) => {
   const customersRef = collection(db, 'customers');
-  const q = query(
-    customersRef,
-    where('createdBy', '==', userId),
-    where('status', '==', 'active')
-  );
-
+  const q = query(customersRef, where('createdBy', '==', userId), orderBy('name'));
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
     const customers = querySnapshot.docs.map(convertFirestoreCustomer);
-    const sortedCustomers = customers.sort((a, b) => a.name.localeCompare(b.name));
-    callback(sortedCustomers);
+    callback(customers);
   });
 };
 
-// Search customers
-export const searchCustomers = async (
-  userId: string,
-  searchTerm: string
-): Promise<Customer[]> => {
-  try {
-    const customersRef = collection(db, 'customers');
-    const q = query(
-      customersRef,
-      where('createdBy', '==', userId),
-      where('status', '==', 'active'),
-      orderBy('name')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    const customers = querySnapshot.docs.map(convertFirestoreCustomer);
-    
-    return customers.filter(customer =>
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.services.some(service => 
-        service.type.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    );
-  } catch (error) {
-    console.error('Error searching customers:', error);
-    throw error;
-  }
-};
-
-// Add a service to a customer
+// Add service to customer
 export const addServiceToCustomer = async (
-  customerId: string,
+  customerId: string, 
   service: Omit<Service, 'id'>
 ): Promise<void> => {
-  try {
-    const customerRef = doc(db, 'customers', customerId);
-    const customerDoc = await getDoc(customerRef);
-    
-    if (!customerDoc.exists()) {
-      throw new Error('Customer not found');
-    }
-    
-    const customerData = customerDoc.data();
-    const services = customerData.services || [];
-    const newService = {
-      ...service,
-      id: Date.now().toString(), // Simple ID generation
-    };
-    
-    await updateDoc(customerRef, {
-      services: [...services, newService],
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error adding service to customer:', error);
-    throw error;
-  }
+  const customer = await getCustomer(customerId);
+  if (!customer) throw new Error('Customer not found');
+  
+  const newService: Service = {
+    ...service,
+    id: Date.now().toString(), // Simple ID generation
+  };
+  
+  await updateCustomer(customerId, {
+    services: [...customer.services, newService],
+  });
 };
 
-// Update a service for a customer
+// Update service for customer
 export const updateServiceForCustomer = async (
   customerId: string,
   serviceId: string,
   updates: Partial<Service>
 ): Promise<void> => {
-  try {
-    const customerRef = doc(db, 'customers', customerId);
-    const customerDoc = await getDoc(customerRef);
-    
-    if (!customerDoc.exists()) {
-      throw new Error('Customer not found');
-    }
-    const customerData = customerDoc.data();
-    const services = customerData.services || [];
-    const serviceIndex = services.findIndex((s: Service) => s.id === serviceId);
-    
-    if (serviceIndex === -1) {
-      throw new Error('Service not found');
-    }
-    
-    services[serviceIndex] = { ...services[serviceIndex], ...updates };
-    await updateDoc(customerRef, {
-      services,
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error updating service for customer:', error);
-    throw error;
-  }
+  const customer = await getCustomer(customerId);
+  if (!customer) throw new Error('Customer not found');
+  
+  const updatedServices = customer.services.map(service =>
+    service.id === serviceId ? { ...service, ...updates } : service
+  );
+  
+  await updateCustomer(customerId, { services: updatedServices });
 };
 
-// Remove a service from a customer
+// Remove service from customer
 export const removeServiceFromCustomer = async (
   customerId: string,
   serviceId: string
 ): Promise<void> => {
-  try {
-    const customerRef = doc(db, 'customers', customerId);
-    const customerDoc = await getDoc(customerRef);
+  const customer = await getCustomer(customerId);
+  if (!customer) throw new Error('Customer not found');
+  
+  const filteredServices = customer.services.filter(service => service.id !== serviceId);
+  await updateCustomer(customerId, { services: filteredServices });
+};
+
+// Add service record to customer history
+export const addServiceRecord = async (
+  customerId: string,
+  serviceRecord: Omit<ServiceRecord, 'id'>
+): Promise<void> => {
+  const customer = await getCustomer(customerId);
+  if (!customer) throw new Error('Customer not found');
+  
+  const newServiceRecord: ServiceRecord = {
+    ...serviceRecord,
+    id: Date.now().toString(),
+  };
+  
+  await updateCustomer(customerId, {
+    serviceHistory: [...customer.serviceHistory, newServiceRecord],
+    lastServiceDate: serviceRecord.date,
+  });
+};
+
+// Get customers needing service (for route optimization)
+export const getCustomersNeedingService = async (date: Date): Promise<Customer[]> => {
+  const fiveDaysAgo = new Date(date);
+  fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+  
+  const customersRef = collection(db, 'customers');
+  const q = query(
+    customersRef,
+    where('status', '==', 'active'),
+    where('lastServiceDate', '<', Timestamp.fromDate(fiveDaysAgo))
+  );
+  
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(convertFirestoreCustomer);
+};
+
+// Calculate customer priorities for route optimization
+export const calculateCustomerPriorities = async (date: Date): Promise<CustomerPriority[]> => {
+  const customers = await getCustomersNeedingService(date);
+  
+  return customers.map(customer => {
+    const daysSinceLastService = customer.lastServiceDate 
+      ? Math.floor((date.getTime() - customer.lastServiceDate.toDate().getTime()) / (1000 * 60 * 60 * 24))
+      : 30; // Default to 30 days if no last service
     
-    if (!customerDoc.exists()) {
-      throw new Error('Customer not found');
+    // Extract zip code from address (simple implementation)
+    const zipCode = customer.address.match(/\b\d{5}\b/)?.[0] || '';
+    
+    // Calculate priority score
+    let priority = daysSinceLastService * 10; // Base priority
+    
+    // Bonus for customer preferences matching current day
+    const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as DayOfWeek;
+    if (customer.servicePreferences.preferredDays.includes(dayOfWeek)) {
+      priority += 20;
     }
     
-    const customerData = customerDoc.data();
-    const services = customerData.services || [];
-    const filteredServices = services.filter((s: Service) => s.id !== serviceId);
+    // Bonus for service type complexity
+    if (customer.services.length > 0) {
+      priority += customer.services.length * 5;
+    }
     
-    await updateDoc(customerRef, {
-      services: filteredServices,
-        updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error removing service from customer:', error);
-    throw error;
-  }
+    return {
+      customerId: customer.id,
+      priority: Math.min(priority, 100), // Cap at 100
+      factors: {
+        daysSinceLastService,
+        customerPreferences: customer.servicePreferences,
+        serviceType: customer.services[0]?.type || 'general',
+        location: { 
+          lat: customer.lat, 
+          lng: customer.lng, 
+          zipCode 
+        },
+      },
+    };
+  });
+};
+
+// Search customers
+export const searchCustomers = async (searchTerm: string): Promise<Customer[]> => {
+  const customers = await getCustomers();
+  return customers.filter(customer =>
+    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    customer.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    customer.services.some(service => 
+      service.type.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
 }; 

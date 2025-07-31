@@ -10,6 +10,7 @@ import { ManagerMap } from "@/components/lawn-route/ManagerMap"
 import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
 import { EditCustomerSheet } from "@/components/lawn-route/EditCustomerSheet"
 import { AddEmployeeSheet } from "@/components/lawn-route/AddEmployeeSheet"
+import { EditEmployeeSheet } from "@/components/lawn-route/EditEmployeeSheet"
 import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
 import { Header } from "@/components/lawn-route/Header"
 import { Button } from "@/components/ui/button"
@@ -35,6 +36,8 @@ export default function LawnRoutePage() {
   const [isEditCustomerSheetOpen, setIsEditCustomerSheetOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [isAddEmployeeSheetOpen, setIsAddEmployeeSheetOpen] = useState(false)
+  const [isEditEmployeeSheetOpen, setIsEditEmployeeSheetOpen] = useState(false)
+  const [editingEmployee, setEditingEmployee] = useState<User | null>(null)
   const [isAddCrewSheetOpen, setIsAddCrewSheetOpen] = useState(false)
   const [editingCrew, setEditingCrew] = useState<{
     crewId: string;
@@ -238,6 +241,42 @@ export default function LawnRoutePage() {
       await deleteDocument('customers', customerId);
     } catch (error) {
       console.error('Error deleting customer:', error);
+      throw error;
+    }
+  };
+
+  // Handle updating employee
+  const handleUpdateEmployee = async (data: any) => {
+    if (!editingEmployee) return;
+    
+    try {
+      const { updateDocument } = await import('@/lib/firebase-services');
+      
+      await updateDocument('users', editingEmployee.id, {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        role: data.role,
+        title: data.title || '',
+        notes: data.notes || '',
+        schedule: data.schedule,
+      });
+      
+      setIsEditEmployeeSheetOpen(false);
+      setEditingEmployee(null);
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      throw error;
+    }
+  };
+
+  // Handle deleting employee
+  const handleDeleteEmployee = async (employeeId: string) => {
+    try {
+      const { deleteDocument } = await import('@/lib/firebase-services');
+      await deleteDocument('users', employeeId);
+    } catch (error) {
+      console.error('Error deleting employee:', error);
       throw error;
     }
   };
@@ -457,7 +496,11 @@ export default function LawnRoutePage() {
       {users.filter(user => user.role === 'employee' || user.role === 'manager').map((user) => (
         <div
           key={user.id}
-          className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
+          className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+          onClick={() => {
+            setEditingEmployee(user);
+            setIsEditEmployeeSheetOpen(true);
+          }}
         >
           <div className="flex justify-between items-start">
             <div>
@@ -655,6 +698,20 @@ export default function LawnRoutePage() {
             open={isAddEmployeeSheetOpen}
             onOpenChange={setIsAddEmployeeSheetOpen}
             onAddEmployee={handleAddEmployee}
+          />
+
+          {/* Edit Employee Sheet */}
+          <EditEmployeeSheet
+            open={isEditEmployeeSheetOpen}
+            onOpenChange={(open) => {
+              setIsEditEmployeeSheetOpen(open);
+              if (!open) {
+                setEditingEmployee(null);
+              }
+            }}
+            employee={editingEmployee}
+            onUpdateEmployee={handleUpdateEmployee}
+            onDeleteEmployee={handleDeleteEmployee}
           />
 
           {/* Add Crew Sheet */}

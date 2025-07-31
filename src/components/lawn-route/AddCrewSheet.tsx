@@ -105,14 +105,14 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
     try {
       await onAddCrew(values)
       toast({
-        title: "Crew Created",
-        description: `${values.name} has been created successfully.`,
+        title: editingCrew ? "Crew Updated" : "Crew Created",
+        description: editingCrew ? "Crew has been updated successfully." : "Crew has been created successfully.",
       })
       form.reset()
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to create crew. Please try again.",
+        description: editingCrew ? "Failed to update crew. Please try again." : "Failed to create crew. Please try again.",
         variant: "destructive",
       })
     } finally {

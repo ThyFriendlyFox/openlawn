@@ -27,57 +27,78 @@ import {
   SheetClose
 } from "@/components/ui/sheet"
 import { useToast } from "@/hooks/use-toast"
-import { Building2, Truck, Users } from "lucide-react"
-import { getAvailableServiceTypes } from "@/lib/crew-assignment-service"
+import { Building2, Users } from "lucide-react"
+import { getUsers } from "@/lib/user-service"
+import type { User } from "@/lib/firebase-types"
 
 interface AddCrewSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onAddCrew: (data: z.infer<typeof formSchema>) => Promise<void>
+  editingCrew?: {
+    crewId: string;
+    members: User[];
+    serviceTypes: string[];
+  } | null
 }
 
 const formSchema = z.object({
-  crewId: z.string().min(3, { message: "Crew ID must be at least 3 characters." }),
-  name: z.string().min(2, { message: "Crew name must be at least 2 characters." }),
-  description: z.string().optional(),
-  serviceType: z.string().min(1, { message: "Service type is required." }),
-  vehicle: z.object({
-    type: z.string().optional(),
-    make: z.string().optional(),
-    model: z.string().optional(),
-    year: z.string().optional(),
-    licensePlate: z.string().optional(),
-  }).optional(),
-  equipment: z.array(z.string()).default([]),
-  notes: z.string().optional(),
+  serviceTypes: z.array(z.string()).min(1, { message: "At least one service type is required." }),
+  assignedEmployees: z.array(z.string()).default([]),
 })
 
-export function AddCrewSheet({ open, onOpenChange, onAddCrew }: AddCrewSheetProps) {
+export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: AddCrewSheetProps) {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const [serviceTypes, setServiceTypes] = React.useState<string[]>([])
+  const [availableUsers, setAvailableUsers] = React.useState<User[]>([])
+
+  const SERVICE_TYPES = [
+    { value: 'push-mow', label: 'Push Mow' },
+    { value: 'edge', label: 'Edge' },
+    { value: 'blow', label: 'Blow' },
+    { value: 'detail', label: 'Detail' },
+    { value: 'riding-mow', label: 'Riding Mow' },
+  ];
 
   React.useEffect(() => {
-    setServiceTypes(getAvailableServiceTypes())
+    // Load available users
+    const loadUsers = async () => {
+      try {
+        const users = await getUsers()
+        // Filter to only show employees and managers (not admins)
+        const availableUsers = users.filter(user => 
+          user.role === 'employee' || user.role === 'manager'
+        )
+        setAvailableUsers(availableUsers)
+      } catch (error) {
+        console.error('Error loading users:', error)
+      }
+    }
+    
+    loadUsers()
   }, [])
 
   const form = useForm<z.infer<typeof formSchema>>({
     defaultValues: {
-      crewId: "",
-      name: "",
-      description: "",
-      serviceType: "",
-      vehicle: {
-        type: "",
-        make: "",
-        model: "",
-        year: "",
-        licensePlate: "",
-      },
-      equipment: [],
-      notes: "",
+      serviceTypes: [],
+      assignedEmployees: [],
     },
   })
+
+  // Update form when editing crew changes
+  React.useEffect(() => {
+    if (editingCrew) {
+      form.reset({
+        serviceTypes: editingCrew.serviceTypes,
+        assignedEmployees: editingCrew.members.map(member => member.id),
+      });
+    } else {
+      form.reset({
+        serviceTypes: [],
+        assignedEmployees: [],
+      });
+    }
+  }, [editingCrew, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
@@ -99,18 +120,7 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew }: AddCrewSheetProp
     }
   }
 
-  const EQUIPMENT_OPTIONS = [
-    "Lawn Mower",
-    "Edger",
-    "Blower",
-    "Trimmer",
-    "Fertilizer Spreader",
-    "Irrigation Tools",
-    "Safety Equipment",
-    "GPS Device",
-    "Tablet/Phone",
-    "First Aid Kit",
-  ]
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -121,199 +131,104 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew }: AddCrewSheetProp
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <SheetHeader className="text-left">
-              <SheetTitle>Create New Crew</SheetTitle>
+              <SheetTitle>{editingCrew ? 'Edit Crew' : 'Create New Crew'}</SheetTitle>
               <SheetDescription>
-                Set up a new crew with equipment and service capabilities.
+                {editingCrew ? 'Update crew assignments and service types.' : 'Assign employees to a crew and set the service type they\'ll handle.'}
               </SheetDescription>
             </SheetHeader>
             <div className="grid gap-4 py-6">
               <FormField
                 control={form.control}
-                name="crewId"
-                render={({ field }) => (
+                name="serviceTypes"
+                render={() => (
                   <FormItem>
-                    <FormLabel>Crew ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="crew-001" {...field} />
-                    </FormControl>
+                    <FormLabel>Service Types</FormLabel>
+                    <div className="space-y-3">
+                      {SERVICE_TYPES.map((service) => (
+                        <FormField
+                          key={service.value}
+                          control={form.control}
+                          name="serviceTypes"
+                          render={({ field }) => {
+                            return (
+                              <FormItem
+                                key={service.value}
+                                className="flex flex-row items-start space-x-3 space-y-0"
+                              >
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(service.value)}
+                                    onCheckedChange={(checked) => {
+                                      return checked
+                                        ? field.onChange([...field.value, service.value])
+                                        : field.onChange(
+                                            field.value?.filter(
+                                              (value) => value !== service.value
+                                            )
+                                          )
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormLabel className="text-sm font-normal cursor-pointer">
+                                  {service.label}
+                                </FormLabel>
+                              </FormItem>
+                            )
+                          }}
+                        />
+                      ))}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Crew Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Crew Alpha" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Brief description of the crew..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="serviceType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Primary Service Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select service type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {serviceTypes.map((serviceType) => (
-                          <SelectItem key={serviceType} value={serviceType}>
-                            {serviceType.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Vehicle Information */}
-              <div className="space-y-4 border-t pt-6">
-                <div className="flex items-center gap-2">
-                  <Truck className="w-5 h-5" />
-                  <h3 className="text-lg font-semibold">Vehicle Information</h3>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="vehicle.type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Vehicle Type</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Truck, Van, etc." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="vehicle.make"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Make</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ford, Chevrolet, etc." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="vehicle.model"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Model</FormLabel>
-                        <FormControl>
-                          <Input placeholder="F-150, Silverado, etc." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="vehicle.year"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Year</FormLabel>
-                        <FormControl>
-                          <Input placeholder="2020" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="vehicle.licensePlate"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel>License Plate</FormLabel>
-                        <FormControl>
-                          <Input placeholder="ABC-123" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Equipment */}
+              {/* Employee Assignment Section */}
               <div className="space-y-4 border-t pt-6">
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5" />
-                  <h3 className="text-lg font-semibold">Equipment</h3>
+                  <h3 className="text-lg font-semibold">Assign Employees</h3>
                 </div>
 
                 <FormField
                   control={form.control}
-                  name="equipment"
+                  name="assignedEmployees"
                   render={() => (
                     <FormItem>
-                      <div className="grid grid-cols-2 gap-3">
-                        {EQUIPMENT_OPTIONS.map((item) => (
+                      <FormLabel>Select Employees</FormLabel>
+                      <div className="space-y-3">
+                        {availableUsers.map((user) => (
                           <FormField
-                            key={item}
+                            key={user.id}
                             control={form.control}
-                            name="equipment"
+                            name="assignedEmployees"
                             render={({ field }) => {
                               return (
                                 <FormItem
-                                  key={item}
+                                  key={user.id}
                                   className="flex flex-row items-start space-x-3 space-y-0"
                                 >
                                   <FormControl>
                                     <Checkbox
-                                      checked={field.value?.includes(item)}
+                                      checked={field.value?.includes(user.id)}
                                       onCheckedChange={(checked) => {
                                         return checked
-                                          ? field.onChange([...field.value, item])
+                                          ? field.onChange([...field.value, user.id])
                                           : field.onChange(
                                               field.value?.filter(
-                                                (value) => value !== item
+                                                (value) => value !== user.id
                                               )
                                             )
                                       }}
                                     />
                                   </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    {item}
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{user.name}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {user.role} {user.title && `(${user.title})`}
+                                      </span>
+                                    </div>
                                   </FormLabel>
                                 </FormItem>
                               )
@@ -327,19 +242,7 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew }: AddCrewSheetProp
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Any additional notes..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
             </div>
             <SheetFooter>
               <SheetClose asChild>
@@ -348,7 +251,7 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew }: AddCrewSheetProp
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Crew"}
+                {isSubmitting ? (editingCrew ? "Updating..." : "Creating...") : (editingCrew ? "Update Crew" : "Create Crew")}
               </Button>
             </SheetFooter>
           </form>

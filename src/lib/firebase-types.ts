@@ -15,7 +15,7 @@ export interface User extends BaseDocument {
   role: 'employee' | 'manager' | 'admin';
   crewId?: string; // Crew assignment
   title?: string; // Optional title like "Lead", "Senior", etc.
-  crewServiceType?: string; // Service type this crew handles (e.g., "lawn-mowing", "edging")
+  crewServiceTypes?: string[]; // Service types this crew handles (e.g., ["push-mow", "edge"])
   assignedManager?: string; // For employees assigned to a manager
   schedule?: {
     monday: { start: string; end: string; available: boolean };

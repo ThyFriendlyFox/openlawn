@@ -3,12 +3,12 @@ import type { User } from './firebase-types';
 
 export interface CrewAssignment {
   crewId: string;
-  serviceType: string;
+  serviceTypes: string[];
   title?: string; // Optional title like "Lead", "Senior", etc.
 }
 
 /**
- * Assign a user to a crew with a specific service type
+ * Assign a user to a crew with multiple service types
  */
 export const assignUserToCrew = async (
   userId: string, 
@@ -16,7 +16,7 @@ export const assignUserToCrew = async (
 ): Promise<void> => {
   await updateDocument('users', userId, {
     crewId: assignment.crewId,
-    crewServiceType: assignment.serviceType,
+    crewServiceTypes: assignment.serviceTypes,
     title: assignment.title,
   });
 };
@@ -27,7 +27,7 @@ export const assignUserToCrew = async (
 export const removeUserFromCrew = async (userId: string): Promise<void> => {
   await updateDocument('users', userId, {
     crewId: null,
-    crewServiceType: null,
+    crewServiceTypes: null,
     title: null,
   });
 };

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
+import { useToast } from "@/hooks/use-toast"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { RouteMap } from "@/components/lawn-route/RouteMap"
 import { CustomerList } from "@/components/lawn-route/CustomerList"
@@ -16,7 +17,6 @@ import { subscribeToCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers } from "@/lib/user-service"
 import { generateOptimalRoutes, getCachedRoute } from "@/lib/route-service"
 import type { Customer, User as FirebaseUser, DailyRoute } from "@/lib/firebase-types"
-import { useToast } from "@/hooks/use-toast"
 import { googleMapsConfig } from "@/lib/env"
 
 export default function LawnRoutePage() {
@@ -33,7 +33,34 @@ export default function LawnRoutePage() {
   const [isAddCustomerSheetOpen, setIsAddCustomerSheetOpen] = useState(false)
   const [isAddEmployeeSheetOpen, setIsAddEmployeeSheetOpen] = useState(false)
   const [isAddCrewSheetOpen, setIsAddCrewSheetOpen] = useState(false)
+  const [editingCrew, setEditingCrew] = useState<{
+    crewId: string;
+    members: User[];
+    serviceTypes: string[];
+  } | null>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
+
+  // Generate human-readable crew IDs using animal names
+  const generateCrewId = () => {
+    const animals = [
+      'Lion', 'Tiger', 'Bear', 'Wolf', 'Eagle', 'Hawk', 'Falcon', 'Owl',
+      'Dolphin', 'Shark', 'Whale', 'Octopus', 'Squid', 'Crab', 'Lobster',
+      'Elephant', 'Giraffe', 'Zebra', 'Rhino', 'Hippo', 'Gorilla', 'Chimp',
+      'Penguin', 'Seal', 'Walrus', 'Polar Bear', 'Arctic Fox', 'Snow Leopard',
+      'Kangaroo', 'Koala', 'Platypus', 'Emu', 'Cassowary', 'Tasmanian Devil',
+      'Panda', 'Red Panda', 'Sloth', 'Anteater', 'Armadillo', 'Capybara',
+      'Meerkat', 'Warthog', 'Hyena', 'Cheetah', 'Leopard', 'Jaguar',
+      'Cobra', 'Python', 'Viper', 'Rattlesnake', 'Anaconda', 'Boa',
+      'Scorpion', 'Tarantula', 'Black Widow', 'Brown Recluse', 'Wolf Spider',
+      'Dragonfly', 'Butterfly', 'Bee', 'Wasp', 'Hornet', 'Ant',
+      'Beetle', 'Ladybug', 'Firefly', 'Cricket', 'Grasshopper', 'Mantis',
+      'Stag Beetle', 'Rhinoceros Beetle', 'Hercules Beetle', 'Goliath Beetle'
+    ];
+    
+    const randomAnimal = animals[Math.floor(Math.random() * animals.length)];
+    const randomNumber = Math.floor(Math.random() * 999) + 1;
+    return `${randomAnimal}-${randomNumber.toString().padStart(3, '0')}`;
+  };
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   
   // Minimum swipe distance
@@ -182,7 +209,7 @@ export default function LawnRoutePage() {
         capabilities: [],
         region: '',
         crewId: null,
-        crewServiceType: null,
+        crewServiceTypes: null,
       });
 
       setIsAddEmployeeSheetOpen(false);
@@ -192,15 +219,72 @@ export default function LawnRoutePage() {
     }
   };
 
-  // Handle adding new crew
+  // Handle deleting crew
+  const handleDeleteCrew = async (crewId: string, members: User[]) => {
+    try {
+      const { removeUserFromCrew } = await import('@/lib/crew-assignment-service');
+      
+      // Remove all members from this crew
+      for (const member of members) {
+        await removeUserFromCrew(member.id);
+      }
+      
+      // Show success message
+      toast({
+        title: "Crew Deleted",
+        description: `Crew ${crewId} has been deleted and all members have been unassigned.`,
+      });
+    } catch (error) {
+      console.error('Error deleting crew:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete crew. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle adding/editing crew
   const handleAddCrew = async (data: any) => {
     try {
-      // For now, we'll just store crew info in a separate collection
-      // In a real app, you might want to create a crews collection
-      console.log('Crew created:', data);
+      const { assignUserToCrew, removeUserFromCrew } = await import('@/lib/crew-assignment-service');
+      
+      if (editingCrew) {
+        // Editing existing crew
+        const crewId = editingCrew.crewId;
+        
+        // Remove all current members from this crew
+        for (const member of editingCrew.members) {
+          await removeUserFromCrew(member.id);
+        }
+        
+        // Assign new/updated employees to this crew
+        for (const employeeId of data.assignedEmployees) {
+          await assignUserToCrew(employeeId, {
+            crewId: crewId,
+            serviceTypes: data.serviceTypes,
+            title: null, // Keep existing title
+          });
+        }
+        
+        setEditingCrew(null);
+      } else {
+        // Creating new crew
+        const crewId = generateCrewId();
+        
+        // Assign selected employees to this crew
+        for (const employeeId of data.assignedEmployees) {
+          await assignUserToCrew(employeeId, {
+            crewId: crewId,
+            serviceTypes: data.serviceTypes,
+            title: null, // Keep existing title
+          });
+        }
+      }
+      
       setIsAddCrewSheetOpen(false);
     } catch (error) {
-      console.error('Error adding crew:', error);
+      console.error('Error adding/editing crew:', error);
       throw error;
     }
   };
@@ -344,55 +428,102 @@ export default function LawnRoutePage() {
   )
 
   // Render crews view
-  const renderCrewsView = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          <Building2 className="w-5 h-5" />
-          Crews ({routes.length})
-        </h2>
-      </div>
-      
-      <div className="space-y-4 p-4">
-      {/* Add New Crew Card */}
-      <div 
-        onClick={() => setIsAddCrewSheetOpen(true)}
-        className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
-      >
-        <Building2 className="w-10 h-10 mb-2" />
-        <p className="font-semibold">Add New Crew</p>
-      </div>
+  const renderCrewsView = () => {
+    // Group users by crewId
+    const crews = new Map<string, {
+      crewId: string;
+      members: User[];
+      serviceTypes: string[];
+    }>();
 
-      {/* Route information */}
-      {routes.map((route) => (
-        <div
-          key={route.crewId}
-          className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="font-semibold">Crew {route.crewId}</h3>
-              <p className="text-sm text-muted-foreground">
-                {route.customers.length} customers assigned
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Estimated duration: {Math.round(route.estimatedDuration / 60)}h {route.estimatedDuration % 60}m
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Total distance: {route.totalDistance.toFixed(1)} miles
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                Active
-              </span>
-            </div>
-          </div>
+    users.forEach(user => {
+      if (user.crewId) {
+        if (!crews.has(user.crewId)) {
+          crews.set(user.crewId, {
+            crewId: user.crewId,
+            members: [],
+            serviceTypes: user.crewServiceTypes || [],
+          });
+        }
+        crews.get(user.crewId)!.members.push(user);
+      }
+    });
+
+    const crewsList = Array.from(crews.values());
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Building2 className="w-5 h-5" />
+            Crews ({crewsList.length})
+          </h2>
         </div>
-      ))}
+        
+        <div className="space-y-4 p-4">
+          {/* Add New Crew Card */}
+          <div 
+            onClick={() => setIsAddCrewSheetOpen(true)}
+            className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
+          >
+            <Building2 className="w-10 h-10 mb-2" />
+            <p className="font-semibold">Add New Crew</p>
+          </div>
+
+          {/* Crew information */}
+          {crewsList.map((crew) => (
+            <div
+              key={crew.crewId}
+              className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+              onClick={() => {
+                setEditingCrew(crew);
+                setIsAddCrewSheetOpen(true);
+              }}
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-semibold">Crew {crew.crewId}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {crew.members.length} members
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Services: {crew.serviceTypes.join(', ')}
+                  </p>
+                  <div className="mt-2">
+                    <p className="text-xs text-muted-foreground">Members:</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {crew.members.map((member) => (
+                        <span
+                          key={member.id}
+                          className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
+                        >
+                          {member.name} ({member.role})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                    Active
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteCrew(crew.crewId, crew.members);
+                    }}
+                    className="ml-2 px-2 py-1 rounded-full text-xs bg-red-100 text-red-800 hover:bg-red-200 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
-  )
+    );
+  }
 
   if (isManager) {
     return (
@@ -459,8 +590,14 @@ export default function LawnRoutePage() {
           {/* Add Crew Sheet */}
           <AddCrewSheet
             open={isAddCrewSheetOpen}
-            onOpenChange={setIsAddCrewSheetOpen}
+            onOpenChange={(open) => {
+              setIsAddCrewSheetOpen(open);
+              if (!open) {
+                setEditingCrew(null);
+              }
+            }}
             onAddCrew={handleAddCrew}
+            editingCrew={editingCrew}
           />
         </div>
       </ProtectedRoute>

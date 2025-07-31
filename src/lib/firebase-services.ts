@@ -143,34 +143,8 @@ export const updateEmployee = async (id: string, data: Partial<Employee>): Promi
   return updateDocument('employees', id, data);
 };
 
-// Crew services
-export const getCrews = async (): Promise<Crew[]> => {
-  const q = query(collection(db, 'crews'), orderBy('name'));
-  const querySnapshot = await getDocs(q);
-  
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Crew[];
-};
-
-export const getActiveCrews = async (): Promise<Crew[]> => {
-  const q = query(
-    collection(db, 'crews'),
-    where('status', '==', 'active'),
-    orderBy('name')
-  );
-  const querySnapshot = await getDocs(q);
-  
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Crew[];
-};
-
-export const createCrew = async (data: Omit<Crew, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  return createDocument('crews', data);
-};
+// Crew services - now handled through user-service.ts
+// Crews are managed through the users collection with crewId field
 
 // Route services
 export const getRoutesForDate = async (date: Date): Promise<Route[]> => {

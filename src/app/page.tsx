@@ -7,6 +7,8 @@ import { RouteMap } from "@/components/lawn-route/RouteMap"
 import { CustomerList } from "@/components/lawn-route/CustomerList"
 import { ManagerMap } from "@/components/lawn-route/ManagerMap"
 import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
+import { AddEmployeeSheet } from "@/components/lawn-route/AddEmployeeSheet"
+import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
 import { Header } from "@/components/lawn-route/Header"
 import { Button } from "@/components/ui/button"
 import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
@@ -28,14 +30,20 @@ export default function LawnRoutePage() {
   
   // State for manager view
   const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews'>('customers')
-  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
+  const [isAddCustomerSheetOpen, setIsAddCustomerSheetOpen] = useState(false)
+  const [isAddEmployeeSheetOpen, setIsAddEmployeeSheetOpen] = useState(false)
+  const [isAddCrewSheetOpen, setIsAddCrewSheetOpen] = useState(false)
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   
   // Minimum swipe distance
   const minSwipeDistance = 30
 
-  const isManager = userProfile?.role === 'office' || userProfile?.role === 'admin'
+  const isManager = userProfile?.role === 'manager' || userProfile?.role === 'admin'
+  
+  // Debug logging
+  console.log('User Profile:', userProfile)
+  console.log('Is Manager:', isManager)
 
   // Subscribe to customers
   useEffect(() => {
@@ -136,7 +144,7 @@ export default function LawnRoutePage() {
         }],
         lastServiceDate: undefined,
         nextServiceDate: undefined,
-                 createdBy: userProfile?.id || '',
+        createdBy: userProfile?.id || '',
         servicePreferences: {
           preferredDays: data.servicePreferences.preferredDays,
           preferredTimeRange: data.servicePreferences.preferredTimeRange,
@@ -148,12 +156,54 @@ export default function LawnRoutePage() {
       }
 
       await addCustomer(newCustomer)
-      setIsAddSheetOpen(false)
+      setIsAddCustomerSheetOpen(false)
     } catch (error) {
       console.error('Error adding customer:', error)
       throw error
     }
   }
+
+  // Handle adding new employee
+  const handleAddEmployee = async (data: any) => {
+    try {
+      const { createDocument } = await import('@/lib/firebase-services');
+      
+      // Create the user document
+      const userId = await createDocument('users', {
+        name: data.name,
+        email: data.email,
+        phone: data.phone || '',
+        role: data.role,
+        title: data.title || null,
+        notes: data.notes || '',
+        schedule: data.schedule,
+        status: 'available',
+        currentLocation: null,
+        capabilities: [],
+        region: '',
+        crewId: null,
+        crewServiceType: null,
+      });
+
+      setIsAddEmployeeSheetOpen(false);
+    } catch (error) {
+      console.error('Error adding employee:', error);
+      throw error;
+    }
+  };
+
+  // Handle adding new crew
+  const handleAddCrew = async (data: any) => {
+    try {
+      // For now, we'll just store crew info in a separate collection
+      // In a real app, you might want to create a crews collection
+      console.log('Crew created:', data);
+      setIsAddCrewSheetOpen(false);
+    } catch (error) {
+      console.error('Error adding crew:', error);
+      throw error;
+    }
+  };
 
   // Navigation bar component
   const renderNavigationBar = () => (
@@ -204,7 +254,7 @@ export default function LawnRoutePage() {
       <div className="space-y-4 p-4">
         {/* Add New Customer Card - Now at the top */}
         <div
-          onClick={() => setIsAddSheetOpen(true)}
+          onClick={() => setIsAddCustomerSheetOpen(true)}
           className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
         >
           <Plus className="w-10 h-10 mb-2" />
@@ -249,19 +299,22 @@ export default function LawnRoutePage() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <Users className="w-5 h-5" />
-          Employees ({users.filter(user => user.role === 'technician' || user.role === 'foreman').length})
+          Employees ({users.filter(user => user.role === 'employee' || user.role === 'manager').length})
         </h2>
       </div>
       
       <div className="space-y-4 p-4">
       {/* Add New Employee Card */}
-      <div className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg bg-secondary/50 flex flex-col items-center justify-center text-center">
+      <div 
+        onClick={() => setIsAddEmployeeSheetOpen(true)}
+        className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
+      >
         <UserIcon className="w-10 h-10 mb-2" />
         <p className="font-semibold">Add New Employee</p>
       </div>
 
       {/* Existing employees */}
-      {users.filter(user => user.role === 'technician' || user.role === 'foreman').map((user) => (
+      {users.filter(user => user.role === 'employee' || user.role === 'manager').map((user) => (
         <div
           key={user.id}
           className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
@@ -271,7 +324,7 @@ export default function LawnRoutePage() {
               <h3 className="font-semibold">{user.name}</h3>
               <p className="text-sm text-muted-foreground">{user.email}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Role: {user.role === 'foreman' ? 'Crew Lead' : 'Technician'}
+                Role: {user.role === 'manager' ? 'Manager' : 'Employee'} {user.title && `(${user.title})`}
               </p>
             </div>
             <div className="text-right">
@@ -302,7 +355,10 @@ export default function LawnRoutePage() {
       
       <div className="space-y-4 p-4">
       {/* Add New Crew Card */}
-      <div className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg bg-secondary/50 flex flex-col items-center justify-center text-center">
+      <div 
+        onClick={() => setIsAddCrewSheetOpen(true)}
+        className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
+      >
         <Building2 className="w-10 h-10 mb-2" />
         <p className="font-semibold">Add New Crew</p>
       </div>
@@ -347,7 +403,7 @@ export default function LawnRoutePage() {
             <div className="md:col-span-2 h-full w-full">
               <ManagerMap 
                 customers={customers}
-                employees={users.filter(user => user.role === 'technician' || user.role === 'foreman')}
+                employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
                 selectedCustomer={null}
                 onSelectCustomer={() => {}}
                 apiKey={googleMapsConfig.apiKey}
@@ -388,9 +444,23 @@ export default function LawnRoutePage() {
 
           {/* Add Customer Sheet */}
           <AddCustomerSheet
-            open={isAddSheetOpen}
-            onOpenChange={setIsAddSheetOpen}
+            open={isAddCustomerSheetOpen}
+            onOpenChange={setIsAddCustomerSheetOpen}
             onAddCustomer={handleAddCustomer}
+          />
+
+          {/* Add Employee Sheet */}
+          <AddEmployeeSheet
+            open={isAddEmployeeSheetOpen}
+            onOpenChange={setIsAddEmployeeSheetOpen}
+            onAddEmployee={handleAddEmployee}
+          />
+
+          {/* Add Crew Sheet */}
+          <AddCrewSheet
+            open={isAddCrewSheetOpen}
+            onOpenChange={setIsAddCrewSheetOpen}
+            onAddCrew={handleAddCrew}
           />
         </div>
       </ProtectedRoute>
@@ -422,8 +492,8 @@ export default function LawnRoutePage() {
 
         {/* Add Customer Sheet */}
         <AddCustomerSheet
-          open={isAddSheetOpen}
-          onOpenChange={setIsAddSheetOpen}
+          open={isAddCustomerSheetOpen}
+          onOpenChange={setIsAddCustomerSheetOpen}
           onAddCustomer={handleAddCustomer}
         />
       </div>

@@ -11,249 +11,242 @@ import {
   orderBy,
   onSnapshot,
   Timestamp,
-  QuerySnapshot,
-  DocumentData,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { User } from './firebase-types';
 
-// Convert Firestore data to User type
-const convertFirestoreUser = (doc: any): User => {
-  const data = doc.data();
-  return {
-    id: doc.id,
-    name: data.displayName || data.name || 'Unknown',
-    email: data.email,
-    phone: data.phone,
-    role: data.role || 'employee',
-    crewId: data.crewId,
-    schedule: data.schedule,
-    currentLocation: data.currentLocation,
-    status: data.isActive ? 'active' : (data.status || 'available'),
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-  };
-};
-
-// Convert User type to Firestore data
-const convertToFirestoreUser = (user: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Omit<User, 'id' | 'createdAt' | 'updatedAt'> => {
-  return {
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
-    role: user.role || 'employee',
-    crewId: user.crewId,
-    schedule: user.schedule,
-    currentLocation: user.currentLocation,
-    status: user.status || 'available',
-  };
-};
-
-// Get all users (for managers and admins)
+// Get all users
 export const getUsers = async (): Promise<User[]> => {
-  try {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, orderBy('displayName'));
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(convertFirestoreUser);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    throw error;
-  }
+  const q = query(collection(db, 'users'), orderBy('name'));
+  const querySnapshot = await getDocs(q);
+  
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as User[];
 };
 
 // Get users by role
 export const getUsersByRole = async (role: User['role']): Promise<User[]> => {
-  try {
-    const usersRef = collection(db, 'users');
-    const q = query(
-      usersRef,
-      where('role', '==', role),
-      orderBy('displayName')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(convertFirestoreUser);
-  } catch (error) {
-    console.error('Error fetching users by role:', error);
-    throw error;
-  }
+  const q = query(
+    collection(db, 'users'),
+    where('role', '==', role),
+    orderBy('name')
+  );
+  const querySnapshot = await getDocs(q);
+  
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as User[];
 };
 
-// Get users by crew
-export const getUsersByCrew = async (crewId: string): Promise<User[]> => {
-  try {
-    const usersRef = collection(db, 'users');
+// Get users by crew ID
+export const getUsersByCrew = async (crewId?: string): Promise<Map<string, User[]>> => {
+  const crews = new Map<string, User[]>();
+  
+  if (crewId) {
+    // Get specific crew
     const q = query(
-      usersRef,
+      collection(db, 'users'),
       where('crewId', '==', crewId),
-      orderBy('displayName')
+      orderBy('name')
+    );
+    const querySnapshot = await getDocs(q);
+    const crewMembers = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as User[];
+    
+    crews.set(crewId, crewMembers);
+  } else {
+    // Get all crews
+    const q = query(
+      collection(db, 'users'),
+      where('crewId', '!=', null),
+      orderBy('crewId'),
+      orderBy('name')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    querySnapshot.docs.forEach(doc => {
+      const user = { id: doc.id, ...doc.data() } as User;
+      if (user.crewId) {
+        if (!crews.has(user.crewId)) {
+          crews.set(user.crewId, []);
+        }
+        crews.get(user.crewId)!.push(user);
+      }
+    });
+  }
+  
+  return crews;
+};
+
+// Get available crews (crews with active members)
+export const getAvailableCrews = async (): Promise<Map<string, User[]>> => {
+  const crews = await getUsersByCrew();
+  const availableCrews = new Map<string, User[]>();
+  
+  crews.forEach((crewMembers, crewId) => {
+    const activeMembers = crewMembers.filter(member => 
+      member.status === 'available' || member.status === 'busy'
     );
     
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(convertFirestoreUser);
-  } catch (error) {
-    console.error('Error fetching users by crew:', error);
-    throw error;
-  }
-};
-
-// Get a single user
-export const getUser = async (userId: string): Promise<User | null> => {
-  try {
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    if (userDoc.exists()) {
-      return convertFirestoreUser(userDoc);
+    if (activeMembers.length > 0) {
+      availableCrews.set(crewId, activeMembers);
     }
-    return null;
-  } catch (error) {
-    console.error('Error fetching user:', error);
-    throw error;
-  }
+  });
+  
+  return availableCrews;
 };
 
-// Add a new user
-export const addUser = async (user: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  try {
-    const firestoreUser = convertToFirestoreUser(user);
-    const docRef = await addDoc(collection(db, 'users'), {
-      ...firestoreUser,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
-    return docRef.id;
-  } catch (error) {
-    console.error('Error adding user:', error);
-    throw error;
-  }
+// Create a new crew (creates a crew leader user)
+export const createCrew = async (crewData: {
+  name: string;
+  description?: string;
+  leaderId: string;
+  services?: { serviceType: string; days: string[]; isActive: boolean }[];
+  vehicle?: { type: string; make: string; model: string; year: number; licensePlate?: string };
+}): Promise<string> => {
+  // Generate a unique crew ID
+  const crewId = `crew_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Update the leader user with crew information
+  const leaderRef = doc(db, 'users', crewData.leaderId);
+  await updateDoc(leaderRef, {
+    crewId,
+    crewName: crewData.name,
+    crewDescription: crewData.description,
+    crewServices: crewData.services || [],
+    crewVehicle: crewData.vehicle,
+    updatedAt: Timestamp.now(),
+  });
+  
+  return crewId;
 };
 
-// Update a user
-export const updateUser = async (userId: string, updates: Partial<User>): Promise<void> => {
-  try {
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
+// Add user to crew
+export const addUserToCrew = async (userId: string, crewId: string): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    crewId,
+    updatedAt: Timestamp.now(),
+  });
+};
+
+// Remove user from crew
+export const removeUserFromCrew = async (userId: string): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    crewId: null,
+    updatedAt: Timestamp.now(),
+  });
+};
+
+// Update crew information
+export const updateCrew = async (crewId: string, updates: {
+  name?: string;
+  description?: string;
+  services?: { serviceType: string; days: string[]; isActive: boolean }[];
+  vehicle?: { type: string; make: string; model: string; year: number; licensePlate?: string };
+}): Promise<void> => {
+  // Get all crew members
+  const crewMembers = await getUsersByCrew(crewId);
+  const members = crewMembers.get(crewId) || [];
+  
+  // Update all crew members with new crew information
+  const batch = writeBatch(db);
+  
+  members.forEach(member => {
+    const userRef = doc(db, 'users', member.id);
+    batch.update(userRef, {
       ...updates,
       updatedAt: Timestamp.now(),
     });
-  } catch (error) {
-    console.error('Error updating user:', error);
-    throw error;
-  }
+  });
+  
+  await batch.commit();
 };
 
-// Update user location
-export const updateUserLocation = async (
-  userId: string,
-  location: { lat: number; lng: number }
-): Promise<void> => {
-  try {
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
-      currentLocation: {
-        ...location,
-        timestamp: Timestamp.now(),
-      },
+// Delete crew (remove crewId from all members)
+export const deleteCrew = async (crewId: string): Promise<void> => {
+  const crewMembers = await getUsersByCrew(crewId);
+  const members = crewMembers.get(crewId) || [];
+  
+  const batch = writeBatch(db);
+  
+  members.forEach(member => {
+    const userRef = doc(db, 'users', member.id);
+    batch.update(userRef, {
+      crewId: null,
+      crewName: null,
+      crewDescription: null,
+      crewServices: null,
+      crewVehicle: null,
       updatedAt: Timestamp.now(),
     });
-  } catch (error) {
-    console.error('Error updating user location:', error);
-    throw error;
-  }
+  });
+  
+  await batch.commit();
 };
 
-// Update user status
-export const updateUserStatus = async (
-  userId: string,
-  status: User['status']
-): Promise<void> => {
-  try {
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
-      status,
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error updating user status:', error);
-    throw error;
-  }
+// Get crew information
+export const getCrewInfo = async (crewId: string): Promise<{
+  id: string;
+  name: string;
+  description?: string;
+  members: User[];
+  services: { serviceType: string; days: string[]; isActive: boolean }[];
+  vehicle?: { type: string; make: string; model: string; year: number; licensePlate?: string };
+} | null> => {
+  const crewMembers = await getUsersByCrew(crewId);
+  const members = crewMembers.get(crewId) || [];
+  
+  if (members.length === 0) return null;
+  
+  // Get crew info from the first member (they should all have the same crew info)
+  const firstMember = members[0];
+  
+  return {
+    id: crewId,
+    name: firstMember.crewName || 'Unnamed Crew',
+    description: firstMember.crewDescription,
+    members,
+    services: firstMember.crewServices || [],
+    vehicle: firstMember.crewVehicle,
+  };
 };
 
-// Assign user to crew
-export const assignUserToCrew = async (
-  userId: string,
-  crewId: string | null
-): Promise<void> => {
-  try {
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
-      crewId,
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error('Error assigning user to crew:', error);
-    throw error;
-  }
-};
-
-// Delete a user
-export const deleteUser = async (userId: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, 'users', userId));
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    throw error;
-  }
-};
-
-// Listen to users in real-time
+// Real-time listeners
 export const subscribeToUsers = (
   callback: (users: User[]) => void
-): (() => void) => {
-  const usersRef = collection(db, 'users');
-  const q = query(usersRef, orderBy('displayName'));
-
-  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const users = querySnapshot.docs.map(convertFirestoreUser);
+) => {
+  const q = query(collection(db, 'users'), orderBy('name'));
+  return onSnapshot(q, (querySnapshot) => {
+    const users = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as User[];
     callback(users);
   });
 };
 
-// Listen to users by crew in real-time
-export const subscribeToUsersByCrew = (
+export const subscribeToCrewMembers = (
   crewId: string,
-  callback: (users: User[]) => void
-): (() => void) => {
-  const usersRef = collection(db, 'users');
+  callback: (members: User[]) => void
+) => {
   const q = query(
-    usersRef,
+    collection(db, 'users'),
     where('crewId', '==', crewId),
-    orderBy('displayName')
+    orderBy('name')
   );
-
-  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-    const users = querySnapshot.docs.map(convertFirestoreUser);
-    callback(users);
+  return onSnapshot(q, (querySnapshot) => {
+    const members = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as User[];
+    callback(members);
   });
-};
-
-// Search users
-export const searchUsers = async (searchTerm: string): Promise<User[]> => {
-  try {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, orderBy('name'));
-    
-    const querySnapshot = await getDocs(q);
-    const users = querySnapshot.docs.map(convertFirestoreUser);
-    
-    return users.filter(user =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  } catch (error) {
-    console.error('Error searching users:', error);
-    throw error;
-  }
 }; 

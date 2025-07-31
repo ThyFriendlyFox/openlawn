@@ -26,7 +26,7 @@ interface Crew {
 interface Employee {
   id: string;
   name: string;
-  role: 'driver' | 'operator' | 'helper' | 'supervisor';
+  role: 'employee' | 'manager' | 'admin';
   location?: {
     lat: number;
     lng: number;

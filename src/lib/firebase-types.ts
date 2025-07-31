@@ -12,9 +12,11 @@ export interface User extends BaseDocument {
   name: string;
   email: string;
   phone?: string;
-  role: 'technician' | 'foreman' | 'office' | 'admin';
-  crewId?: string; // Simple crew grouping
-  assignedForeman?: string; // For technicians assigned to a foreman
+  role: 'employee' | 'manager' | 'admin';
+  crewId?: string; // Crew assignment
+  title?: string; // Optional title like "Lead", "Senior", etc.
+  crewServiceType?: string; // Service type this crew handles (e.g., "lawn-mowing", "edging")
+  assignedManager?: string; // For employees assigned to a manager
   schedule?: {
     monday: { start: string; end: string; available: boolean };
     tuesday: { start: string; end: string; available: boolean };
@@ -32,6 +34,22 @@ export interface User extends BaseDocument {
   status: 'available' | 'busy' | 'offline';
   capabilities?: string[]; // Service types this user can handle
   region?: string; // Geographic area or zip code
+  
+  // Crew management fields (replaces crews collection)
+  crewName?: string; // Display name for the crew
+  crewDescription?: string; // Optional crew description
+  crewServices?: { // Services this crew provides
+    serviceType: string;
+    days: string[];
+    isActive: boolean;
+  }[];
+  crewVehicle?: { // Vehicle information
+    type: string;
+    make: string;
+    model: string;
+    year: number;
+    licensePlate?: string;
+  };
 }
 
 // Service model (embedded in customers)
@@ -52,7 +70,7 @@ export interface Service {
 export interface ServiceRecord {
   id: string;
   date: Timestamp;
-  foremanId: string;
+  managerId: string;
   beforePhotos: string[]; // Compressed URLs from Firebase Storage
   afterPhotos: string[]; // Compressed URLs from Firebase Storage
   notes: string;
@@ -108,8 +126,8 @@ export interface CustomerPriority {
 
 export interface CrewAvailability {
   crewId: string;
-  foremanId: string;
-  technicianIds: string[];
+  managerId: string;
+  employeeIds: string[];
   availability: {
     date: Date;
     startTime: string; // e.g., "08:00"

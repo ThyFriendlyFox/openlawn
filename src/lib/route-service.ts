@@ -16,30 +16,56 @@ const routeCache = new Map<string, DailyRoute>();
 // Get available crews for a specific date
 export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]> => {
   const users = await getUsers();
-  const foremen = users.filter(user => user.role === 'foreman' && user.status === 'available');
-  const technicians = users.filter(user => user.role === 'technician' && user.status === 'available');
   
-  return foremen.map(foreman => {
-    const assignedTechnicians = technicians.filter(tech => tech.assignedForeman === foreman.id);
-    
-    return {
-      crewId: foreman.crewId || `crew-${foreman.id}`,
-      foremanId: foreman.id,
-      technicianIds: assignedTechnicians.map(tech => tech.id),
+  // Group users by crewId to create crews
+  const crewMap = new Map<string, {
+    crewId: string;
+    crewServiceType: string;
+    employees: User[];
+    manager?: User;
+  }>();
+  
+  // Process all users with crew assignments
+  users.forEach(user => {
+    if (user.crewId && user.status === 'available') {
+      if (!crewMap.has(user.crewId)) {
+        crewMap.set(user.crewId, {
+          crewId: user.crewId,
+          crewServiceType: user.crewServiceType || 'general',
+          employees: [],
+          manager: undefined
+        });
+      }
+      
+      const crew = crewMap.get(user.crewId)!;
+      if (user.role === 'manager') {
+        crew.manager = user;
+      } else {
+        crew.employees.push(user);
+      }
+    }
+  });
+  
+  // Convert to CrewAvailability format
+  return Array.from(crewMap.values())
+    .filter(crew => crew.manager && crew.employees.length > 0) // Only crews with manager and employees
+    .map(crew => ({
+      crewId: crew.crewId,
+      managerId: crew.manager!.id,
+      employeeIds: crew.employees.map(emp => emp.id),
       availability: {
         date,
-        startTime: foreman.schedule?.[getDayOfWeek(date)]?.start || '08:00',
-        endTime: foreman.schedule?.[getDayOfWeek(date)]?.end || '17:00',
+        startTime: crew.manager!.schedule?.[getDayOfWeek(date)]?.start || '08:00',
+        endTime: crew.manager!.schedule?.[getDayOfWeek(date)]?.end || '17:00',
         maxCustomers: 12,
-        currentLocation: foreman.currentLocation ? {
-          lat: foreman.currentLocation.lat,
-          lng: foreman.currentLocation.lng
+        currentLocation: crew.manager!.currentLocation ? {
+          lat: crew.manager!.currentLocation.lat,
+          lng: crew.manager!.currentLocation.lng
         } : undefined,
       },
-      capabilities: foreman.capabilities || ['general'],
-      region: foreman.region || 'default',
-    };
-  });
+      capabilities: [crew.crewServiceType], // Crew can only handle its assigned service type
+      region: crew.manager!.region || 'default',
+    }));
 };
 
 // Get day of week as string

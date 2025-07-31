@@ -4,9 +4,9 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
-import { RouteMap } from "@/components/lawn-route/RouteMap"
-import { CustomerList } from "@/components/lawn-route/CustomerList"
+
 import { ManagerMap } from "@/components/lawn-route/ManagerMap"
+import { RouteDisplay } from "@/components/lawn-route/RouteDisplay"
 import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
 import { EditCustomerSheet } from "@/components/lawn-route/EditCustomerSheet"
 import { AddEmployeeSheet } from "@/components/lawn-route/AddEmployeeSheet"
@@ -78,16 +78,32 @@ export default function LawnRoutePage() {
   console.log('User Profile:', userProfile)
   console.log('Is Manager:', isManager)
 
-  // Subscribe to customers
+  // Subscribe to customers (managers see all, employees see assigned)
   useEffect(() => {
     if (!userProfile) return
 
-    const unsubscribeCustomers = subscribeToCustomers((customers) => {
-      setCustomers(customers)
-    })
-
-    return () => unsubscribeCustomers()
-  }, [userProfile])
+    if (isManager) {
+      // Managers see all customers
+      const unsubscribeCustomers = subscribeToCustomers((customers) => {
+        setCustomers(customers)
+      })
+      return () => unsubscribeCustomers()
+    } else {
+      // Employees see only their assigned customers
+      const loadEmployeeCustomers = async () => {
+        try {
+          const { getEmployeeAssignedCustomers } = await import('@/lib/route-service');
+          const assignedCustomers = await getEmployeeAssignedCustomers(userProfile.id);
+          setCustomers(assignedCustomers);
+        } catch (error) {
+          console.error('Error loading employee customers:', error);
+          setCustomers([]);
+        }
+      };
+      
+      loadEmployeeCustomers();
+    }
+  }, [userProfile, isManager])
 
   // Subscribe to users (for manager view)
   useEffect(() => {
@@ -100,26 +116,40 @@ export default function LawnRoutePage() {
     return () => unsubscribeUsers()
   }, [isManager])
 
-  // Generate routes for today
+  // Generate routes for today and tomorrow
   useEffect(() => {
-    if (!isManager) return
+    if (!userProfile) return
 
-    const generateTodayRoutes = async () => {
+    const generateRoutes = async () => {
       try {
-        const todayRoutes = await generateOptimalRoutes(new Date())
-        setRoutes(todayRoutes)
+        const today = new Date()
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        
+        const todayRoutes = await generateOptimalRoutes(today)
+        const tomorrowRoutes = await generateOptimalRoutes(tomorrow)
+        
+        const allRoutes = [...todayRoutes, ...tomorrowRoutes]
+        console.log('Generated routes:', allRoutes);
+        console.log('Route details:', allRoutes.map(route => ({
+          crewId: route.crewId,
+          customerCount: route.customers.length,
+          hasOptimizedPath: !!route.optimizedPath,
+          pathLength: route.optimizedPath?.length || 0
+        })));
+        setRoutes(allRoutes)
       } catch (error) {
         console.error('Error generating routes:', error)
         toast({
           title: "Route Generation Error",
-          description: "Failed to generate optimal routes for today.",
+          description: "Failed to generate optimal routes.",
           variant: "destructive",
         })
       }
     }
 
-    generateTodayRoutes()
-  }, [isManager, customers, users, toast])
+    generateRoutes()
+  }, [userProfile, customers, users, toast])
 
   // Swipe handlers
   const onTouchStart = (e: React.TouchEvent) => {
@@ -422,7 +452,7 @@ export default function LawnRoutePage() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <UserIcon className="w-5 h-5" />
-          Customers ({customers.length})
+          {isManager ? `Customers (${customers.length})` : `My Assigned Customers (${customers.length})`}
         </h2>
       </div>
       
@@ -631,9 +661,10 @@ export default function LawnRoutePage() {
           <Header />
           <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
             <div className="md:col-span-2 h-full w-full">
-              <ManagerMap 
+              <RouteDisplay 
                 customers={customers}
                 employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
+                routes={routes}
                 selectedCustomer={null}
                 onSelectCustomer={() => {}}
                 apiKey={googleMapsConfig.apiKey}
@@ -731,26 +762,27 @@ export default function LawnRoutePage() {
     )
   }
 
-  // Employee view (original simple interface)
+  // Employee view (customer management only)
   return (
     <ProtectedRoute>
       <div className="flex flex-col h-svh bg-background text-foreground font-body">
         <Header />
         <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
           <div className="md:col-span-2 h-full w-full">
-            <RouteMap 
-              customers={customers} 
+            <RouteDisplay 
+              customers={customers}
+              employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
+              routes={routes}
               selectedCustomer={null}
               onSelectCustomer={() => {}}
               apiKey={googleMapsConfig.apiKey}
             />
           </div>
-          <div className="md:col-span-1 flex-grow overflow-y-auto">
-            <CustomerList 
-              customers={customers} 
-              onSelectCustomer={() => {}}
-              onAddCustomer={() => setIsAddSheetOpen(true)}
-            />
+          <div className="md:col-span-1 flex flex-col overflow-hidden">
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {renderCustomersView()}
+            </div>
           </div>
         </main>
 
@@ -759,6 +791,20 @@ export default function LawnRoutePage() {
           open={isAddCustomerSheetOpen}
           onOpenChange={setIsAddCustomerSheetOpen}
           onAddCustomer={handleAddCustomer}
+        />
+
+        {/* Edit Customer Sheet */}
+        <EditCustomerSheet
+          open={isEditCustomerSheetOpen}
+          onOpenChange={(open) => {
+            setIsEditCustomerSheetOpen(open);
+            if (!open) {
+              setEditingCustomer(null);
+            }
+          }}
+          customer={editingCustomer}
+          onUpdateCustomer={handleUpdateCustomer}
+          onDeleteCustomer={handleDeleteCustomer}
         />
       </div>
     </ProtectedRoute>

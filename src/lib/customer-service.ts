@@ -209,14 +209,26 @@ export const getCustomersNeedingService = async (date: Date): Promise<Customer[]
   fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
   
   const customersRef = collection(db, 'customers');
-  const q = query(
+  
+  // Get all active customers first
+  const allCustomersQuery = query(
     customersRef,
-    where('status', '==', 'active'),
-    where('lastServiceDate', '<', Timestamp.fromDate(fiveDaysAgo))
+    where('status', '==', 'active')
   );
   
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(convertFirestoreCustomer);
+  const allCustomersSnapshot = await getDocs(allCustomersQuery);
+  const allCustomers = allCustomersSnapshot.docs.map(convertFirestoreCustomer);
+  
+  // Filter customers that need service (null lastServiceDate or older than 5 days)
+  const customersNeedingService = allCustomers.filter(customer => {
+    if (!customer.lastServiceDate) {
+      return true; // Include customers with no service history
+    }
+    const daysSinceLastService = Math.floor((date.getTime() - customer.lastServiceDate.toDate().getTime()) / (1000 * 60 * 60 * 24));
+    return daysSinceLastService >= 5;
+  });
+  
+  return customersNeedingService;
 };
 
 // Calculate customer priorities for route optimization

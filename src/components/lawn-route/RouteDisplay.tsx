@@ -5,15 +5,15 @@ import {
   GoogleMap,
   useJsApiLoader,
   Marker,
-  Polyline,
+  DirectionsRenderer,
 } from '@react-google-maps/api'
-import type { Customer, User } from '@/lib/firebase-types'
-import { Loader2, AlertTriangle, MapPin } from 'lucide-react'
+import type { Customer, User, DailyRoute } from '@/lib/firebase-types'
+import { Loader2, AlertTriangle } from 'lucide-react'
 
-interface ManagerMapProps {
+interface RouteDisplayProps {
   customers: Customer[]
   employees: User[]
-  routes?: any[] // Add routes prop
+  routes: DailyRoute[]
   selectedCustomer: Customer | null
   onSelectCustomer: (customer: Customer) => void
   apiKey?: string;
@@ -49,14 +49,14 @@ const mapOptions = {
   ],
 }
 
-export function ManagerMap({ 
+export function RouteDisplay({ 
   customers, 
   employees, 
-  routes = [], 
+  routes, 
   selectedCustomer, 
   onSelectCustomer, 
   apiKey 
-}: ManagerMapProps) {
+}: RouteDisplayProps) {
   
   React.useEffect(() => {
     if (!apiKey) {
@@ -77,6 +77,50 @@ export function ManagerMap({
   }, [loadError]);
 
   const mapRef = React.useRef<google.maps.Map | null>(null)
+  const [directionsResponses, setDirectionsResponses] = React.useState<google.maps.DirectionsResult[]>([])
+
+  // Generate directions for each route
+  React.useEffect(() => {
+    if (!isLoaded || routes.length === 0) return;
+
+    const generateDirections = async () => {
+      const directionsService = new google.maps.DirectionsService();
+      const newDirectionsResponses: google.maps.DirectionsResult[] = [];
+
+      for (const route of routes) {
+        if (route.customers.length < 2) continue;
+
+        try {
+          const origin = { lat: route.customers[0].lat, lng: route.customers[0].lng };
+          const destination = { 
+            lat: route.customers[route.customers.length - 1].lat, 
+            lng: route.customers[route.customers.length - 1].lng 
+          };
+          
+          const waypoints = route.customers.slice(1, -1).map(customer => ({
+            location: { lat: customer.lat, lng: customer.lng },
+            stopover: true,
+          }));
+
+          const result = await directionsService.route({
+            origin,
+            destination,
+            waypoints,
+            travelMode: google.maps.TravelMode.DRIVING,
+            optimizeWaypoints: true,
+          });
+
+          newDirectionsResponses.push(result);
+        } catch (error) {
+          console.error('Error generating directions for route:', route.crewId, error);
+        }
+      }
+
+      setDirectionsResponses(newDirectionsResponses);
+    };
+
+    generateDirections();
+  }, [routes, isLoaded]);
 
   if (loadError) {
     return (
@@ -147,27 +191,21 @@ export function ManagerMap({
         );
       })}
 
-      {/* Route lines */}
-      {routes.map((route, index) => {
-        console.log('Rendering route:', route);
-        if (!route.optimizedPath || route.optimizedPath.length < 2) {
-          console.log('Route skipped - no optimizedPath or insufficient points:', route);
-          return null;
-        }
-
-        return (
-          <Polyline
-            key={`route-${index}`}
-            path={route.optimizedPath}
-            options={{
+      {/* Route directions */}
+      {directionsResponses.map((directionsResponse, index) => (
+        <DirectionsRenderer
+          key={`directions-${index}`}
+          directions={directionsResponse}
+          options={{
+            suppressMarkers: true, // We're using our own markers
+            polylineOptions: {
               strokeColor: '#3B82F6',
               strokeOpacity: 0.8,
-              strokeWeight: 3,
-            }}
-          />
-        );
-      })}
+              strokeWeight: 4,
+            },
+          }}
+        />
+      ))}
     </GoogleMap>
   )
 } 
- 

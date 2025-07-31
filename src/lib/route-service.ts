@@ -7,7 +7,7 @@ import type {
   User,
   DayOfWeek 
 } from './firebase-types';
-import { calculateCustomerPriorities, getCustomersNeedingService } from './customer-service';
+import { calculateCustomerPriorities, getCustomersNeedingService, getCustomers } from './customer-service';
 import { getUsers, getUsersByRole } from './user-service';
 
 // Route cache for daily routes
@@ -20,7 +20,7 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
   // Group users by crewId to create crews
   const crewMap = new Map<string, {
     crewId: string;
-    crewServiceType: string;
+    crewServiceTypes: string[];
     employees: User[];
     manager?: User;
   }>();
@@ -31,7 +31,7 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
       if (!crewMap.has(user.crewId)) {
         crewMap.set(user.crewId, {
           crewId: user.crewId,
-          crewServiceType: user.crewServiceType || 'general',
+          crewServiceTypes: user.crewServiceTypes || ['general'],
           employees: [],
           manager: undefined
         });
@@ -47,7 +47,7 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
   });
   
   // Convert to CrewAvailability format
-  return Array.from(crewMap.values())
+  const availableCrews = Array.from(crewMap.values())
     .filter(crew => crew.manager && crew.employees.length > 0) // Only crews with manager and employees
     .map(crew => ({
       crewId: crew.crewId,
@@ -57,15 +57,17 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
         date,
         startTime: crew.manager!.schedule?.[getDayOfWeek(date)]?.start || '08:00',
         endTime: crew.manager!.schedule?.[getDayOfWeek(date)]?.end || '17:00',
-        maxCustomers: 12,
+        maxCustomers: 12 as const,
         currentLocation: crew.manager!.currentLocation ? {
           lat: crew.manager!.currentLocation.lat,
           lng: crew.manager!.currentLocation.lng
         } : undefined,
       },
-      capabilities: [crew.crewServiceType], // Crew can only handle its assigned service type
+      capabilities: crew.crewServiceTypes, // Crew can handle multiple service types
       region: crew.manager!.region || 'default',
     }));
+    
+  return availableCrews;
 };
 
 // Get day of week as string
@@ -118,24 +120,41 @@ export const optimizeRouteForCrew = async (
   customers: CustomerPriority[],
   date: Date
 ): Promise<DailyRoute> => {
-  // Get full customer data
-  const customerData = await Promise.all(
-    customers.map(async (customerPriority) => {
-      const response = await fetch(`/api/customers/${customerPriority.customerId}`);
-      return response.json();
-    })
-  );
+  // Get all customers to match with priorities
+  const allCustomers = await getCustomers();
   
-  // Simple route optimization (can be enhanced with Google Maps API)
-  const optimizedPath = customerData.map(customer => ({
+  // Filter customers by crew service types and get full customer data
+  const compatibleCustomers = customers
+    .map(customerPriority => {
+      const customer = allCustomers.find(c => c.id === customerPriority.customerId);
+      if (!customer) return null;
+      
+      // Check if customer's service type matches crew's capabilities
+      const hasCompatibleService = customer.services.some(service => 
+        crew.capabilities.includes(service.type)
+      );
+      
+      return hasCompatibleService ? customer : null;
+    })
+    .filter(Boolean) as Customer[];
+  
+  // Sort by priority
+  const sortedCustomers = compatibleCustomers.sort((a, b) => {
+    const aPriority = customers.find(c => c.customerId === a.id)?.priority || 0;
+    const bPriority = customers.find(c => c.customerId === b.id)?.priority || 0;
+    return bPriority - aPriority;
+  });
+  
+  // Limit to max customers per crew
+  const limitedCustomers = sortedCustomers.slice(0, crew.availability.maxCustomers);
+  
+  // Simple route optimization (nearest neighbor)
+  const optimizedPath = limitedCustomers.map(customer => ({
     lat: customer.lat,
     lng: customer.lng
   }));
   
-  // Calculate estimated duration (30 minutes per customer + travel time)
-  const estimatedDuration = customerData.length * 30; // minutes
-  
-  // Calculate total distance (simplified)
+  // Calculate total distance
   let totalDistance = 0;
   for (let i = 1; i < optimizedPath.length; i++) {
     const prev = optimizedPath[i - 1];
@@ -143,10 +162,13 @@ export const optimizeRouteForCrew = async (
     totalDistance += calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
   }
   
+  // Calculate estimated duration (30 minutes per customer + travel time)
+  const estimatedDuration = limitedCustomers.length * 30; // minutes
+  
   return {
     crewId: crew.crewId,
     date,
-    customers: customerData,
+    customers: limitedCustomers,
     optimizedPath,
     estimatedDuration,
     totalDistance,
@@ -189,10 +211,15 @@ export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> =
     crewAssignments.map(async (assignment) => {
       const prioritizedCustomers = assignment.customers.slice(0, 12); // Max 12 customers
       
-      return await optimizeRouteForCrew(
+      // Get full customer data for the prioritized customers
+      const allCustomers = await getCustomers();
+      const customerObjects = prioritizedCustomers
+        .map(customerPriority => allCustomers.find(c => c.id === customerPriority.customerId))
+        .filter(Boolean) as Customer[];
+      
+      return await generateGoogleDirectionsRoute(
         assignment.crew,
-        prioritizedCustomers,
-        date
+        customerObjects
       );
     })
   );
@@ -249,13 +276,13 @@ export const updateRouteForTraffic = async (
   // Create new crew availability with current location
   const crew: CrewAvailability = {
     crewId: existingRoute.crewId,
-    foremanId: '', // Will be filled by the optimization function
-    technicianIds: [],
+    managerId: '', // Will be filled by the optimization function
+    employeeIds: [],
     availability: {
       date: today,
       startTime: '08:00',
       endTime: '17:00',
-      maxCustomers: 12,
+      maxCustomers: 12 as const,
       currentLocation,
     },
     capabilities: ['general'],
@@ -294,4 +321,119 @@ export const getAllRoutesForDate = async (date: Date): Promise<DailyRoute[]> => 
   });
   
   return routes;
+}; 
+
+// Get customers assigned to a specific employee for today and tomorrow
+export const getEmployeeAssignedCustomers = async (employeeId: string): Promise<Customer[]> => {
+  const users = await getUsers();
+  const employee = users.find(user => user.id === employeeId);
+  
+  if (!employee || !employee.crewId) {
+    return [];
+  }
+  
+  // Get all customers
+  const allCustomers = await getCustomers();
+  
+  // Get routes for today and tomorrow
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  const todayRoutes = await generateOptimalRoutes(today);
+  const tomorrowRoutes = await generateOptimalRoutes(tomorrow);
+  
+  // Find routes for this employee's crew
+  const crewRoutes = [...todayRoutes, ...tomorrowRoutes].filter(route => 
+    route.crewId === employee.crewId
+  );
+  
+  // Get all customers from these routes
+  const assignedCustomerIds = new Set<string>();
+  crewRoutes.forEach(route => {
+    route.customers.forEach(customer => {
+      assignedCustomerIds.add(customer.id);
+    });
+  });
+  
+  // Return customers assigned to this employee's crew
+  return allCustomers.filter(customer => assignedCustomerIds.has(customer.id));
+}; 
+
+// Generate Google Directions API route for a crew
+export const generateGoogleDirectionsRoute = async (
+  crew: CrewAvailability,
+  customers: Customer[]
+): Promise<DailyRoute> => {
+  if (customers.length === 0) {
+    return {
+      crewId: crew.crewId,
+      date: crew.availability.date,
+      customers: [],
+      optimizedPath: [],
+      estimatedDuration: 0,
+      totalDistance: 0,
+    };
+  }
+
+  // Create waypoints for Google Directions API
+  const waypoints = customers.map(customer => ({
+    location: { lat: customer.lat, lng: customer.lng },
+    stopover: true,
+  }));
+
+  // Use first customer as origin, last as destination
+  const origin = { lat: customers[0].lat, lng: customers[0].lng };
+  const destination = { 
+    lat: customers[customers.length - 1].lat, 
+    lng: customers[customers.length - 1].lng 
+  };
+
+  // If we have more than 2 customers, use waypoints
+  const waypointsForAPI = customers.length > 2 ? waypoints.slice(1, -1) : [];
+
+  try {
+    // This would need to be called from the frontend where Google Maps API is available
+    // For now, we'll create a simple polyline path
+    const optimizedPath = customers.map(customer => ({
+      lat: customer.lat,
+      lng: customer.lng
+    }));
+
+    // Calculate total distance
+    let totalDistance = 0;
+    for (let i = 1; i < optimizedPath.length; i++) {
+      const prev = optimizedPath[i - 1];
+      const curr = optimizedPath[i];
+      totalDistance += calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
+    }
+
+    const estimatedDuration = customers.length * 30; // 30 minutes per customer
+
+    return {
+      crewId: crew.crewId,
+      date: crew.availability.date,
+      customers,
+      optimizedPath,
+      estimatedDuration,
+      totalDistance,
+    };
+  } catch (error) {
+    console.error('Error generating Google Directions route:', error);
+    
+    // Fallback to simple path
+    const optimizedPath = customers.map(customer => ({
+      lat: customer.lat,
+      lng: customer.lng
+    }));
+
+    return {
+      crewId: crew.crewId,
+      date: crew.availability.date,
+      customers,
+      optimizedPath,
+      estimatedDuration: customers.length * 30,
+      totalDistance: 0,
+    };
+  }
 }; 

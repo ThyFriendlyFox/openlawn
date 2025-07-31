@@ -163,12 +163,12 @@ export class AutoScheduleGenerator {
     crewMembers: User[],
     maxCustomers: number
   ): Customer[] {
-    // Get crew's service type from the first member (all members should have same crewServiceType)
-    const crewServiceType = crewMembers[0]?.crewServiceType || 'general';
+    // Get crew's service types from the first member (all members should have same crewServiceTypes)
+    const crewServiceTypes = crewMembers[0]?.crewServiceTypes || ['general'];
 
-    // Filter customers by crew service type
+    // Filter customers by crew service types
     const compatibleCustomers = customers.filter(customer =>
-      customer.services.some(service => service.type === crewServiceType)
+      customer.services.some(service => crewServiceTypes.includes(service.type))
     );
 
     // Sort by priority (days since last service, customer preferences)

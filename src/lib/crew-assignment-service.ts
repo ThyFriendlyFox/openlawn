@@ -77,7 +77,7 @@ export const getAllCrews = async (): Promise<Array<{
       if (!crewMap.has(user.crewId)) {
         crewMap.set(user.crewId, {
           crewId: user.crewId,
-          serviceType: user.crewServiceType || 'general',
+          serviceType: user.crewServiceTypes?.[0] || 'general',
           members: [],
           manager: undefined
         });

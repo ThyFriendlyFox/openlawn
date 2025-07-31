@@ -8,6 +8,7 @@ import { RouteMap } from "@/components/lawn-route/RouteMap"
 import { CustomerList } from "@/components/lawn-route/CustomerList"
 import { ManagerMap } from "@/components/lawn-route/ManagerMap"
 import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
+import { EditCustomerSheet } from "@/components/lawn-route/EditCustomerSheet"
 import { AddEmployeeSheet } from "@/components/lawn-route/AddEmployeeSheet"
 import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
 import { Header } from "@/components/lawn-route/Header"
@@ -31,6 +32,8 @@ export default function LawnRoutePage() {
   // State for manager view
   const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews'>('customers')
   const [isAddCustomerSheetOpen, setIsAddCustomerSheetOpen] = useState(false)
+  const [isEditCustomerSheetOpen, setIsEditCustomerSheetOpen] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [isAddEmployeeSheetOpen, setIsAddEmployeeSheetOpen] = useState(false)
   const [isAddCrewSheetOpen, setIsAddCrewSheetOpen] = useState(false)
   const [editingCrew, setEditingCrew] = useState<{
@@ -169,8 +172,8 @@ export default function LawnRoutePage() {
           scheduledDate: new Date() as any,
           status: 'scheduled',
         }],
-        lastServiceDate: undefined,
-        nextServiceDate: undefined,
+        lastServiceDate: null,
+        nextServiceDate: null,
         createdBy: userProfile?.id || '',
         servicePreferences: {
           preferredDays: data.servicePreferences.preferredDays,
@@ -189,6 +192,55 @@ export default function LawnRoutePage() {
       throw error
     }
   }
+
+  // Handle updating customer
+  const handleUpdateCustomer = async (data: any) => {
+    if (!editingCustomer) return;
+    
+    try {
+      const { updateDocument } = await import('@/lib/firebase-services');
+      
+      await updateDocument('customers', editingCustomer.id, {
+        name: data.name,
+        address: data.address,
+        lat: data.coordinates?.lat || editingCustomer.lat,
+        lng: data.coordinates?.lng || editingCustomer.lng,
+        notes: data.notes || '',
+        services: [{
+          id: editingCustomer.services[0]?.id || Date.now().toString(),
+          type: data.serviceType,
+          description: `${data.serviceType} service`,
+          price: editingCustomer.services[0]?.price || 0,
+          scheduledDate: editingCustomer.services[0]?.scheduledDate || new Date() as any,
+          status: editingCustomer.services[0]?.status || 'scheduled',
+        }],
+        servicePreferences: {
+          preferredDays: data.servicePreferences.preferredDays,
+          preferredTimeRange: data.servicePreferences.preferredTimeRange,
+          serviceFrequency: data.servicePreferences.serviceFrequency === 'weekly' ? 7 : 
+                          data.servicePreferences.serviceFrequency === 'biweekly' ? 14 : 
+                          data.servicePreferences.serviceFrequency === 'monthly' ? 30 : 1,
+        },
+      });
+      
+      setIsEditCustomerSheetOpen(false);
+      setEditingCustomer(null);
+    } catch (error) {
+      console.error('Error updating customer:', error);
+      throw error;
+    }
+  };
+
+  // Handle deleting customer
+  const handleDeleteCustomer = async (customerId: string) => {
+    try {
+      const { deleteDocument } = await import('@/lib/firebase-services');
+      await deleteDocument('customers', customerId);
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+      throw error;
+    }
+  };
 
   // Handle adding new employee
   const handleAddEmployee = async (data: any) => {
@@ -350,6 +402,10 @@ export default function LawnRoutePage() {
         <div
           key={customer.id}
           className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+          onClick={() => {
+            setEditingCustomer(customer);
+            setIsEditCustomerSheetOpen(true);
+          }}
         >
           <div className="flex justify-between items-start">
             <div>
@@ -578,6 +634,20 @@ export default function LawnRoutePage() {
             open={isAddCustomerSheetOpen}
             onOpenChange={setIsAddCustomerSheetOpen}
             onAddCustomer={handleAddCustomer}
+          />
+
+          {/* Edit Customer Sheet */}
+          <EditCustomerSheet
+            open={isEditCustomerSheetOpen}
+            onOpenChange={(open) => {
+              setIsEditCustomerSheetOpen(open);
+              if (!open) {
+                setEditingCustomer(null);
+              }
+            }}
+            customer={editingCustomer}
+            onUpdateCustomer={handleUpdateCustomer}
+            onDeleteCustomer={handleDeleteCustomer}
           />
 
           {/* Add Employee Sheet */}

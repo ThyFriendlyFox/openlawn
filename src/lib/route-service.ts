@@ -35,6 +35,8 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
     // Consider user available if they have a schedule for this day with valid start/end times
     const isAvailable = daySchedule && daySchedule.start && daySchedule.end;
     
+    console.log(`User ${user.name} (${user.crewId}) - Schedule for ${dayOfWeek}:`, daySchedule, 'Available:', isAvailable);
+    
     if (user.crewId && isAvailable) {
       if (!crewMap.has(user.crewId)) {
         crewMap.set(user.crewId, {
@@ -46,20 +48,17 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
       }
       
       const crew = crewMap.get(user.crewId)!;
-      if (user.role === 'manager') {
-        crew.manager = user;
-      } else {
-        crew.employees.push(user);
-      }
+      // Just add all users to the employees array regardless of role
+      crew.employees.push(user);
     }
   });
   
   // Convert to CrewAvailability format
   const availableCrews = Array.from(crewMap.values())
-    .filter(crew => crew.employees.length > 0) // Only crews with employees (manager optional for now)
+    .filter(crew => crew.employees.length > 0) // Only crews with at least one available user
     .map(crew => {
-      // If no manager, use the first employee as the "manager" for routing purposes
-      const effectiveManager = crew.manager || crew.employees[0];
+      // Use the first available user as the effective manager for routing purposes
+      const effectiveManager = crew.employees[0];
       
       return {
         crewId: crew.crewId,
@@ -80,7 +79,7 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
       };
     });
     
-  console.log(`Found ${availableCrews.length} available crews for ${dayOfWeek}`);
+  console.log(`Found ${availableCrews.length} available crews for ${dayOfWeek}:`, availableCrews.map(c => ({ crewId: c.crewId, capabilities: c.capabilities, employeeCount: c.employeeIds.length })));
   return availableCrews;
 };
 
@@ -262,6 +261,8 @@ export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> =
     });
     
     console.log(`Crew ${crew.crewId} can service ${compatibleCustomers.length} customers`);
+    console.log(`Crew ${crew.crewId} capabilities:`, crew.capabilities);
+    console.log(`Crew ${crew.crewId} compatible customers:`, compatibleCustomers.map(c => ({ name: c.name, services: c.services.map(s => s.type) })));
     
     if (compatibleCustomers.length > 0) {
       // Limit to 12 customers max per crew
@@ -277,7 +278,10 @@ export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> =
         totalDistance: 0, // We don't need precise distance calculations
       };
       
+      console.log(`Created route for crew ${crew.crewId} with ${assignedCustomers.length} customers`);
       routes.push(route);
+    } else {
+      console.log(`No compatible customers found for crew ${crew.crewId}`);
     }
   }
   

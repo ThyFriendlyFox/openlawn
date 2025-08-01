@@ -16,6 +16,7 @@ interface RouteDisplayProps {
   routes: DailyRoute[]
   selectedCustomer: Customer | null
   onSelectCustomer: (customer: Customer) => void
+  onRouteClick?: (route: DailyRoute) => void
   apiKey?: string;
 }
 
@@ -55,6 +56,7 @@ export function RouteDisplay({
   routes, 
   selectedCustomer, 
   onSelectCustomer, 
+  onRouteClick,
   apiKey 
 }: RouteDisplayProps) {
   
@@ -78,12 +80,36 @@ export function RouteDisplay({
 
   const mapRef = React.useRef<google.maps.Map | null>(null)
   const [directionsResponses, setDirectionsResponses] = React.useState<google.maps.DirectionsResult[]>([])
+  const [selectedRouteIndex, setSelectedRouteIndex] = React.useState<number | null>(null)
+
+  // Generate a color based on crewId
+  const generateColor = (crewId: string): string => {
+    let hash = 0;
+    for (let i = 0; i < crewId.length; i++) {
+      hash = crewId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = hash % 360;
+    return `hsl(${hue}, 70%, 50%)`;
+  };
+
+  // Check if a route is for today or tomorrow
+  const isTodayRoute = (route: DailyRoute): boolean => {
+    const today = new Date();
+    const routeDate = new Date(route.date);
+    return routeDate.toDateString() === today.toDateString();
+  };
 
   // Generate directions for each route
   React.useEffect(() => {
     if (!isLoaded || routes.length === 0) return;
 
     console.log('RouteDisplay - Processing routes:', routes.length);
+    console.log('RouteDisplay - Route details:', routes.map(r => ({ 
+      crewId: r.crewId, 
+      customerCount: r.customers.length, 
+      customers: r.customers.map(c => c.name),
+      date: r.date
+    })));
 
     const generateDirections = async () => {
       const directionsService = new google.maps.DirectionsService();
@@ -114,7 +140,7 @@ export function RouteDisplay({
             destination,
             waypoints,
             travelMode: google.maps.TravelMode.DRIVING,
-            optimizeWaypoints: true,
+            optimizeWaypoints: false, // Disable optimization to keep routes separate
           });
 
           newDirectionsResponses.push(result);
@@ -157,22 +183,29 @@ export function RouteDisplay({
       onLoad={(map) => {mapRef.current = map}}
     >
       {/* Customer markers */}
-      {customers.map((customer) => (
-        <Marker
-          key={customer.id}
-          position={{ lat: customer.lat, lng: customer.lng }}
-          title={customer.name}
-          onClick={() => onSelectCustomer(customer)}
-          icon={{
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: selectedCustomer?.id === customer.id ? 10 : 7,
-            fillColor: selectedCustomer?.id === customer.id ? 'hsl(var(--ring))' : 'hsl(var(--primary))',
-            fillOpacity: 1,
-            strokeWeight: 2,
-            strokeColor: 'white',
-          }}
-        />
-      ))}
+      {customers.map((customer) => {
+        // Check if this customer is in the selected tomorrow route
+        const isInSelectedRoute = selectedRouteIndex !== null && 
+          routes[selectedRouteIndex]?.customers.some(c => c.id === customer.id);
+        
+        return (
+          <Marker
+            key={customer.id}
+            position={{ lat: customer.lat, lng: customer.lng }}
+            title={customer.name}
+            onClick={() => onSelectCustomer(customer)}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: selectedCustomer?.id === customer.id ? 10 : isInSelectedRoute ? 9 : 7,
+              fillColor: selectedCustomer?.id === customer.id ? 'hsl(var(--ring))' : 
+                        isInSelectedRoute ? 'hsl(var(--accent))' : 'hsl(var(--primary))',
+              fillOpacity: 1,
+              strokeWeight: 2,
+              strokeColor: 'white',
+            }}
+          />
+        );
+      })}
 
       {/* Employee location markers */}
       {employees.map((employee) => {
@@ -199,20 +232,36 @@ export function RouteDisplay({
       })}
 
       {/* Route directions */}
-      {directionsResponses.map((directionsResponse, index) => (
-        <DirectionsRenderer
-          key={`directions-${index}`}
-          directions={directionsResponse}
-          options={{
-            suppressMarkers: true, // We're using our own markers
-            polylineOptions: {
-              strokeColor: '#3B82F6',
-              strokeOpacity: 0.8,
-              strokeWeight: 4,
-            },
-          }}
-        />
-      ))}
+      {directionsResponses.map((directionsResponse, index) => {
+        const route = routes[index];
+        const color = generateColor(route.crewId);
+        const isToday = isTodayRoute(route);
+        
+        return (
+          <DirectionsRenderer
+            key={`directions-${index}`}
+            directions={directionsResponse}
+            options={{
+              suppressMarkers: true, // We're using our own markers
+              polylineOptions: {
+                strokeColor: color,
+                strokeOpacity: isToday ? 0.8 : 0.3, // Solid for today, transparent for tomorrow
+                strokeWeight: isToday ? 4 : 2,
+                clickable: !isToday, // Only tomorrow routes are clickable
+              },
+            }}
+            onClick={() => {
+              if (!isToday) {
+                setSelectedRouteIndex(index);
+                // Show customers for this route
+                console.log(`Clicked on tomorrow route for crew ${route.crewId}:`, route.customers.map(c => c.name));
+              }
+              // Call the route click handler for managers
+              onRouteClick?.(route);
+            }}
+          />
+        );
+      })}
     </GoogleMap>
   )
 } 

@@ -12,6 +12,7 @@ import { EditCustomerSheet } from "@/components/lawn-route/EditCustomerSheet"
 import { AddEmployeeSheet } from "@/components/lawn-route/AddEmployeeSheet"
 import { EditEmployeeSheet } from "@/components/lawn-route/EditEmployeeSheet"
 import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
+import { CrewPopup } from "@/components/lawn-route/CrewPopup"
 import { Header } from "@/components/lawn-route/Header"
 import { Button } from "@/components/ui/button"
 import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
@@ -46,6 +47,8 @@ export default function LawnRoutePage() {
   } | null>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [selectedRoute, setSelectedRoute] = useState<DailyRoute | null>(null)
+  const [isCrewPopupOpen, setIsCrewPopupOpen] = useState(false)
 
   // Generate human-readable crew IDs using animal names
   const generateCrewId = () => {
@@ -130,7 +133,29 @@ export default function LawnRoutePage() {
         const todayRoutes = await generateOptimalRoutes(today)
         const tomorrowRoutes = await generateOptimalRoutes(tomorrow)
         
-        const allRoutes = [...todayRoutes, ...tomorrowRoutes]
+        // Combine routes by crew, showing today's routes as primary
+        const crewRoutes = new Map<string, DailyRoute>();
+        
+        // Add today's routes first
+        todayRoutes.forEach(route => {
+          crewRoutes.set(route.crewId, route);
+        });
+        
+        // Add tomorrow's routes if no today route exists for that crew
+        tomorrowRoutes.forEach(route => {
+          if (!crewRoutes.has(route.crewId)) {
+            crewRoutes.set(route.crewId, route);
+          }
+        });
+        
+        let allRoutes = Array.from(crewRoutes.values());
+        
+        // For employees, only show routes for their assigned crew
+        if (!isManager && userProfile?.crewId) {
+          allRoutes = allRoutes.filter(route => route.crewId === userProfile.crewId);
+          console.log(`Employee ${userProfile.name} - Filtered to only show crew ${userProfile.crewId}`);
+        }
+        
         console.log('Generated routes:', allRoutes);
         console.log('Route details:', allRoutes.map(route => ({
           crewId: route.crewId,
@@ -418,6 +443,11 @@ export default function LawnRoutePage() {
     setIsEditCustomerSheetOpen(true);
   };
 
+  const handleRouteClick = (route: DailyRoute) => {
+    setSelectedRoute(route);
+    setIsCrewPopupOpen(true);
+  };
+
   // Navigation bar component
   const renderNavigationBar = () => (
     <div className="flex w-full bg-background border-t">
@@ -672,6 +702,7 @@ export default function LawnRoutePage() {
                 routes={routes}
                 selectedCustomer={selectedCustomer}
                 onSelectCustomer={handleSelectCustomer}
+                onRouteClick={handleRouteClick}
                 apiKey={googleMapsConfig.apiKey}
               />
             </div>
@@ -761,6 +792,14 @@ export default function LawnRoutePage() {
             }}
             onAddCrew={handleAddCrew}
             editingCrew={editingCrew}
+          />
+
+          {/* Crew Popup */}
+          <CrewPopup
+            open={isCrewPopupOpen}
+            onOpenChange={setIsCrewPopupOpen}
+            route={selectedRoute}
+            employees={users}
           />
         </div>
       </ProtectedRoute>

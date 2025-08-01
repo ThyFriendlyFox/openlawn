@@ -6,7 +6,7 @@ import { RoleBasedRouter } from "@/components/auth/RoleBasedRouter"
 import { EnvCheck } from "@/components/ui/env-check"
 
 export const metadata: Metadata = {
-  title: 'LawnRoute',
+  title: 'OpenLawn',
   description: 'AI-powered CRM for lawn care businesses',
 };
 

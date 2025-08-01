@@ -69,7 +69,7 @@ export function Header() {
       <div className="flex items-center">
         <Leaf className="text-primary w-6 h-6 mr-2" />
         <h1 className="text-xl font-bold text-gray-800 font-headline">
-          LawnRoute
+          openlawn
         </h1>
       </div>
 

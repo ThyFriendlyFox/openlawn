@@ -18,7 +18,7 @@ import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
 import { subscribeToCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers } from "@/lib/user-service"
 import { generateOptimalRoutes, getCachedRoute } from "@/lib/route-service"
-import type { Customer, User as FirebaseUser, DailyRoute } from "@/lib/firebase-types"
+import type { Customer, User as FirebaseUser, DailyRoute, User } from "@/lib/firebase-types"
 import { googleMapsConfig } from "@/lib/env"
 
 export default function LawnRoutePage() {
@@ -45,6 +45,7 @@ export default function LawnRoutePage() {
     serviceTypes: string[];
   } | null>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   // Generate human-readable crew IDs using animal names
   const generateCrewId = () => {
@@ -410,6 +411,13 @@ export default function LawnRoutePage() {
     }
   };
 
+  // Handle customer selection from map
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setEditingCustomer(customer);
+    setIsEditCustomerSheetOpen(true);
+  };
+
   // Navigation bar component
   const renderNavigationBar = () => (
     <div className="flex w-full bg-background border-t">
@@ -471,10 +479,7 @@ export default function LawnRoutePage() {
         <div
           key={customer.id}
           className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors cursor-pointer"
-          onClick={() => {
-            setEditingCustomer(customer);
-            setIsEditCustomerSheetOpen(true);
-          }}
+          onClick={() => handleSelectCustomer(customer)}
         >
           <div className="flex justify-between items-start">
             <div>
@@ -665,8 +670,8 @@ export default function LawnRoutePage() {
                 customers={customers}
                 employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
                 routes={routes}
-                selectedCustomer={null}
-                onSelectCustomer={() => {}}
+                selectedCustomer={selectedCustomer}
+                onSelectCustomer={handleSelectCustomer}
                 apiKey={googleMapsConfig.apiKey}
               />
             </div>
@@ -773,8 +778,8 @@ export default function LawnRoutePage() {
               customers={customers}
               employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
               routes={routes}
-              selectedCustomer={null}
-              onSelectCustomer={() => {}}
+              selectedCustomer={selectedCustomer}
+              onSelectCustomer={handleSelectCustomer}
               apiKey={googleMapsConfig.apiKey}
             />
           </div>

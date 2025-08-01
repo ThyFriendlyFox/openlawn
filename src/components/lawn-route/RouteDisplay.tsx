@@ -83,12 +83,19 @@ export function RouteDisplay({
   React.useEffect(() => {
     if (!isLoaded || routes.length === 0) return;
 
+    console.log('RouteDisplay - Processing routes:', routes.length);
+
     const generateDirections = async () => {
       const directionsService = new google.maps.DirectionsService();
       const newDirectionsResponses: google.maps.DirectionsResult[] = [];
 
       for (const route of routes) {
-        if (route.customers.length < 2) continue;
+        console.log('RouteDisplay - Processing route:', route.crewId, 'with', route.customers.length, 'customers');
+        
+        if (route.customers.length < 2) {
+          console.log('RouteDisplay - Skipping route with less than 2 customers');
+          continue;
+        }
 
         try {
           const origin = { lat: route.customers[0].lat, lng: route.customers[0].lng };

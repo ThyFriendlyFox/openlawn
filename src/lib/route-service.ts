@@ -16,6 +16,8 @@ const routeCache = new Map<string, DailyRoute>();
 // Get available crews for a specific date
 export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]> => {
   const users = await getUsers();
+  const dayOfWeek = getDayOfWeek(date);
+  console.log(`getAvailableCrews - Checking availability for ${dayOfWeek}:`, users.length, 'total users');
   
   // Group users by crewId to create crews
   const crewMap = new Map<string, {
@@ -27,7 +29,13 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
   
   // Process all users with crew assignments
   users.forEach(user => {
-    if (user.crewId && user.status === 'available') {
+    // Check if user is available based on their schedule for the given date
+    const daySchedule = user.schedule?.[dayOfWeek];
+    
+    // Consider user available if they have a schedule for this day with valid start/end times
+    const isAvailable = daySchedule && daySchedule.start && daySchedule.end;
+    
+    if (user.crewId && isAvailable) {
       if (!crewMap.has(user.crewId)) {
         crewMap.set(user.crewId, {
           crewId: user.crewId,
@@ -48,25 +56,31 @@ export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]>
   
   // Convert to CrewAvailability format
   const availableCrews = Array.from(crewMap.values())
-    .filter(crew => crew.manager && crew.employees.length > 0) // Only crews with manager and employees
-    .map(crew => ({
-      crewId: crew.crewId,
-      managerId: crew.manager!.id,
-      employeeIds: crew.employees.map(emp => emp.id),
-      availability: {
-        date,
-        startTime: crew.manager!.schedule?.[getDayOfWeek(date)]?.start || '08:00',
-        endTime: crew.manager!.schedule?.[getDayOfWeek(date)]?.end || '17:00',
-        maxCustomers: 12 as const,
-        currentLocation: crew.manager!.currentLocation ? {
-          lat: crew.manager!.currentLocation.lat,
-          lng: crew.manager!.currentLocation.lng
-        } : undefined,
-      },
-      capabilities: crew.crewServiceTypes, // Crew can handle multiple service types
-      region: crew.manager!.region || 'default',
-    }));
+    .filter(crew => crew.employees.length > 0) // Only crews with employees (manager optional for now)
+    .map(crew => {
+      // If no manager, use the first employee as the "manager" for routing purposes
+      const effectiveManager = crew.manager || crew.employees[0];
+      
+      return {
+        crewId: crew.crewId,
+        managerId: effectiveManager.id,
+        employeeIds: crew.employees.map(emp => emp.id),
+        availability: {
+          date,
+          startTime: effectiveManager.schedule?.[getDayOfWeek(date)]?.start || '08:00',
+          endTime: effectiveManager.schedule?.[getDayOfWeek(date)]?.end || '17:00',
+          maxCustomers: 12 as const,
+          currentLocation: effectiveManager.currentLocation ? {
+            lat: effectiveManager.currentLocation.lat,
+            lng: effectiveManager.currentLocation.lng
+          } : undefined,
+        },
+        capabilities: crew.crewServiceTypes, // Crew can handle multiple service types
+        region: effectiveManager.region || 'default',
+      };
+    });
     
+  console.log(`Found ${availableCrews.length} available crews for ${dayOfWeek}`);
   return availableCrews;
 };
 
@@ -98,14 +112,29 @@ export const assignClustersToCrews = (
 ): Array<{ crew: CrewAvailability; customers: CustomerPriority[] }> => {
   const assignments: Array<{ crew: CrewAvailability; customers: CustomerPriority[] }> = [];
   
-  // Simple assignment: assign clusters to crews based on region matching
+  // Group all customers by crew (one route per crew)
+  const crewCustomers = new Map<string, CustomerPriority[]>();
+  
   clusters.forEach((customers, zipCode) => {
     // Find crew in same region or assign to first available crew
     const matchingCrew = crews.find(crew => crew.region === zipCode) || crews[0];
     
     if (matchingCrew) {
+      if (!crewCustomers.has(matchingCrew.crewId)) {
+        crewCustomers.set(matchingCrew.crewId, []);
+      }
+      
+      // Add customers to this crew's list
+      crewCustomers.get(matchingCrew.crewId)!.push(...customers);
+    }
+  });
+  
+  // Create one assignment per crew with all their customers
+  crews.forEach(crew => {
+    const customers = crewCustomers.get(crew.crewId);
+    if (customers && customers.length > 0) {
       assignments.push({
-        crew: matchingCrew,
+        crew,
         customers: customers.sort((a, b) => b.priority - a.priority)
       });
     }
@@ -188,42 +217,71 @@ const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 };
 
-// Generate optimal routes for a specific date
+// Generate simple routes for a specific date based on your intended system
 export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> => {
-  // Step 1: Calculate customer priorities
-  const customerPriorities = await calculateCustomerPriorities(date);
+  console.log('generateOptimalRoutes called for date:', date);
   
-  // Step 2: Get available crews
+  // Step 1: Get available crews (employees with schedules for this day)
   const availableCrews = await getAvailableCrews(date);
+  console.log('Available crews:', availableCrews.length);
   
   if (availableCrews.length === 0) {
+    console.log('No available crews, returning empty array');
     return [];
   }
   
-  // Step 3: Geographic clustering by zip code
-  const clusters = clusterByZipCode(customerPriorities);
+  // Step 2: Get all customers who want service on this day
+  const allCustomers = await getCustomers();
+  const dayOfWeek = getDayOfWeek(date);
   
-  // Step 4: Assign clusters to crews
-  const crewAssignments = assignClustersToCrews(clusters, availableCrews);
+  const customersWantingService = allCustomers.filter(customer => {
+    // Check if customer wants service on this day
+    const wantsServiceToday = customer.servicePreferences?.preferredDays?.includes(dayOfWeek) || false;
+    
+    // Check if customer needs service (not serviced in last 5 days)
+    const lastService = customer.lastServiceDate?.toDate();
+    const fiveDaysAgo = new Date(date);
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    const needsService = !lastService || lastService < fiveDaysAgo;
+    
+    return customer.status === 'active' && wantsServiceToday && needsService;
+  });
   
-  // Step 5: Optimize each crew's route
-  const routes = await Promise.all(
-    crewAssignments.map(async (assignment) => {
-      const prioritizedCustomers = assignment.customers.slice(0, 12); // Max 12 customers
-      
-      // Get full customer data for the prioritized customers
-      const allCustomers = await getCustomers();
-      const customerObjects = prioritizedCustomers
-        .map(customerPriority => allCustomers.find(c => c.id === customerPriority.customerId))
-        .filter(Boolean) as Customer[];
-      
-      return await generateGoogleDirectionsRoute(
-        assignment.crew,
-        customerObjects
+  console.log(`Customers wanting service on ${dayOfWeek}:`, customersWantingService.length);
+  
+  // Step 3: Simple assignment - assign customers to crews based on service type compatibility
+  const routes: DailyRoute[] = [];
+  
+  for (const crew of availableCrews) {
+    // Find customers this crew can service
+    const compatibleCustomers = customersWantingService.filter(customer => {
+      // Check if any of the customer's services match the crew's capabilities
+      return customer.services.some(service => 
+        crew.capabilities.includes(service.type)
       );
-    })
-  );
+    });
+    
+    console.log(`Crew ${crew.crewId} can service ${compatibleCustomers.length} customers`);
+    
+    if (compatibleCustomers.length > 0) {
+      // Limit to 12 customers max per crew
+      const assignedCustomers = compatibleCustomers.slice(0, 12);
+      
+      // Create simple route - just the order of customers (no complex optimization)
+      const route: DailyRoute = {
+        crewId: crew.crewId,
+        date,
+        customers: assignedCustomers,
+        optimizedPath: assignedCustomers.map(c => ({ lat: c.lat, lng: c.lng })),
+        estimatedDuration: assignedCustomers.length * 30, // 30 minutes per customer
+        totalDistance: 0, // We don't need precise distance calculations
+      };
+      
+      routes.push(route);
+    }
+  }
   
+  console.log('Generated routes:', routes.length);
   return routes;
 };
 
@@ -325,28 +383,42 @@ export const getAllRoutesForDate = async (date: Date): Promise<DailyRoute[]> => 
 
 // Get customers assigned to a specific employee for today and tomorrow
 export const getEmployeeAssignedCustomers = async (employeeId: string): Promise<Customer[]> => {
+  console.log('getEmployeeAssignedCustomers called for employeeId:', employeeId);
+  
   const users = await getUsers();
   const employee = users.find(user => user.id === employeeId);
   
+  console.log('Employee found:', employee);
+  console.log('Employee crewId:', employee?.crewId);
+  
   if (!employee || !employee.crewId) {
+    console.log('No employee or crewId found, returning empty array');
     return [];
   }
   
   // Get all customers
   const allCustomers = await getCustomers();
+  console.log('All customers:', allCustomers.length);
   
   // Get routes for today and tomorrow
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   
+  console.log('Generating routes for today and tomorrow...');
   const todayRoutes = await generateOptimalRoutes(today);
   const tomorrowRoutes = await generateOptimalRoutes(tomorrow);
+  
+  console.log('Today routes:', todayRoutes.length);
+  console.log('Tomorrow routes:', tomorrowRoutes.length);
   
   // Find routes for this employee's crew
   const crewRoutes = [...todayRoutes, ...tomorrowRoutes].filter(route => 
     route.crewId === employee.crewId
   );
+  
+  console.log('Routes for employee crew:', crewRoutes.length);
+  console.log('Crew routes:', crewRoutes);
   
   // Get all customers from these routes
   const assignedCustomerIds = new Set<string>();
@@ -356,8 +428,13 @@ export const getEmployeeAssignedCustomers = async (employeeId: string): Promise<
     });
   });
   
+  console.log('Assigned customer IDs:', Array.from(assignedCustomerIds));
+  
   // Return customers assigned to this employee's crew
-  return allCustomers.filter(customer => assignedCustomerIds.has(customer.id));
+  const assignedCustomers = allCustomers.filter(customer => assignedCustomerIds.has(customer.id));
+  console.log('Final assigned customers:', assignedCustomers.length);
+  
+  return assignedCustomers;
 }; 
 
 // Generate Google Directions API route for a crew

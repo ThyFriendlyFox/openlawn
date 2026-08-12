@@ -632,6 +632,7 @@ export default function LawnRoutePage() {
         notes: data.notes || '',
         schedule: data.schedule,
         status: 'available',
+        accountStatus: 'active',
         currentLocation: null,
         capabilities: [],
         region: '',
@@ -792,6 +793,15 @@ export default function LawnRoutePage() {
       </div>
       
       <div className="space-y-4 p-4">
+      {/* Add New Employee */}
+      <div
+        className="p-6 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground transition-colors cursor-pointer"
+        onClick={() => setIsAddEmployeeSheetOpen(true)}
+      >
+        <Plus className="w-10 h-10 mb-2" />
+        <p className="font-semibold">Add New Employee</p>
+      </div>
+
       {/* Existing employees */}
       {users.filter(user => user.role === 'employee' || user.role === 'manager').map((user) => (
         <div

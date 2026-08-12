@@ -78,3 +78,12 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - `<promise>TASK-employee-view:DONE</promise>`
 
 ### profile-schedule-company — starting
+
+### profile-schedule-company — FAIL then PASS
+- Attempt 1: Company Settings menu item no-op (sheet not mounted on employee branch)
+- Fix: mount CompanySettingsSheet in employee view
+- Retest: Profile, Schedule, Company Settings all open/close
+- Artifacts: `profile-sheet-open.png`, `schedule-sheet-open.png`, `company-sheet-open.png`, `profile-schedule-company-pass.png`
+- `<promise>TASK-profile-schedule-company:DONE</promise>`
+
+### pending-users — starting

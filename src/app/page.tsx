@@ -1269,6 +1269,15 @@ export default function LawnRoutePage() {
           onOpenChange={setIsScheduleSheetOpen}
         />
 
+        {/* Company Settings Sheet (employee can view/update base location) */}
+        <CompanySettingsSheet
+          open={isCompanySettingsOpen}
+          onOpenChange={setIsCompanySettingsOpen}
+          companyId={userProfile?.companyId || ''}
+          currentBaseLocation={baseLocation}
+          onLocationUpdated={handleLocationUpdated}
+        />
+
         {/* Company Management Sheet (Admin Only) */}
         <CompanyManagementSheet
           open={isCompanyManagementOpen}

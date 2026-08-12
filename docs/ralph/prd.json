@@ -180,7 +180,7 @@
       "effort_label": "medium",
       "effort": 1,
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     },
@@ -196,7 +196,7 @@
       "effort_label": "high",
       "effort": 2,
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     },

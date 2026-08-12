@@ -94,3 +94,10 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - `<promise>TASK-pending-users:DONE</promise>`
 
 ### service-photos — starting
+
+### service-photos — PASS
+- Edit customer → Services & Photos; before/after capture/upload + empty state
+- Artifacts: `service-photos-open.png`, `service-photos-pass.png`
+- `<promise>TASK-service-photos:DONE</promise>`
+
+### mobile-layout — starting

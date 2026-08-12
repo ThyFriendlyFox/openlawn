@@ -50,3 +50,10 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - FAIL attempt 1 expected: AddEmployeeSheet never opened (no setIsAddEmployeeSheetOpen(true))
 - Fix: added Add New Employee control + accountStatus active on create
 - Retesting after fix
+
+### employee-crud-sheets — PASS (after fix)
+- Added Crew Lead Sam; list count 4→5; edit opens/closes
+- Artifacts: `employee-crud-sheet-open.png`, `employee-crud-pass.png`
+- `<promise>TASK-employee-crud-sheets:DONE</promise>`
+
+### crew-sheet — starting

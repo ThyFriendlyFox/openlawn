@@ -31,7 +31,7 @@
       "effort_label": "medium",
       "effort": 1,
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     },

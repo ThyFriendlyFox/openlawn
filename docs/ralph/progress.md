@@ -47,3 +47,6 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - `<promise>TASK-customer-crud-sheets:DONE</promise>`
 
 ### employee-crud-sheets — starting
+- FAIL attempt 1 expected: AddEmployeeSheet never opened (no setIsAddEmployeeSheetOpen(true))
+- Fix: added Add New Employee control + accountStatus active on create
+- Retesting after fix

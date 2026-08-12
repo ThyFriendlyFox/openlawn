@@ -164,7 +164,7 @@
       "effort_label": "medium",
       "effort": 1,
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     },

@@ -87,3 +87,10 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - `<promise>TASK-profile-schedule-company:DONE</promise>`
 
 ### pending-users — starting
+
+### pending-users — PASS
+- Opened Pending sheet; approved New Hire; badge 2→1
+- Artifacts: `pending-users-open.png`, `pending-users-pass.png`
+- `<promise>TASK-pending-users:DONE</promise>`
+
+### service-photos — starting

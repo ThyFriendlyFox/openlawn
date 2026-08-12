@@ -64,3 +64,17 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - `<promise>TASK-crew-sheet:DONE</promise>`
 
 ### route-display — starting
+
+### route-display — PASS
+- Map + markers; crew card opens edit/detail; no crash
+- Artifacts: `route-display-*.png`
+- `<promise>TASK-route-display:DONE</promise>`
+
+### employee-view — starting
+
+### employee-view — PASS
+- Employee badge + My Assigned Customers (0); no manager tabs chrome
+- Artifact: `employee-view-pass.png`
+- `<promise>TASK-employee-view:DONE</promise>`
+
+### profile-schedule-company — starting

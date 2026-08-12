@@ -40,3 +40,10 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - `<promise>TASK-manager-shell:DONE</promise>`
 
 ### customer-crud-sheets — starting
+
+### customer-crud-sheets — PASS
+- Added Beta Lawn via sheet; list → Customers (2); edit sheet opens/closes
+- Artifacts: `customer-crud-sheet-open.png`, `customer-crud-pass.png`
+- `<promise>TASK-customer-crud-sheets:DONE</promise>`
+
+### employee-crud-sheets — starting

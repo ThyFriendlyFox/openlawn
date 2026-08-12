@@ -81,7 +81,7 @@
       "effort_label": "high",
       "effort": 2,
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     },

@@ -33,3 +33,10 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 
 ### manager-shell — starting
 - Sign in as manager; verify header, map, Customers/Employees/Crews reachability
+
+### manager-shell — PASS
+- Header (Manager/Export/Pending/RM), map tiles, Customers/Employees/Crews via bottom bars
+- Artifacts: `manager-shell-*.png`
+- `<promise>TASK-manager-shell:DONE</promise>`
+
+### customer-crud-sheets — starting

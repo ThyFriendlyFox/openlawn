@@ -1,0 +1,236 @@
+{
+  "meta": {
+    "title": "OpenLawn real screen UI testing (Ralph loop)",
+    "scope": "Exercise OpenLawn's real browser UI via computerUse; fix regressions until each scenario passes with screenshot proof.",
+    "app_url": "http://localhost:9002",
+    "viewports": ["1440x900", "390x844"],
+    "non_goals": [
+      "Unit/integration test suite expansion (optional follow-up)",
+      "Native Capacitor iOS/Android store builds",
+      "Production Firebase data mutation outside the test company",
+      "Pixel-perfect visual redesign"
+    ],
+    "assumptions": [
+      "npm run dev serves the app on port 9002",
+      "Firebase env (or emulators) is configured",
+      "Test accounts exist for manager, employee, and pending user",
+      "Max iterations = 2 × scenario count"
+    ],
+    "artifacts_dir": "/opt/cursor/artifacts/ralph"
+  },
+  "tasks": [
+    {
+      "id": "auth-signin",
+      "title": "Auth — sign-in",
+      "description": "Auth form loads; valid credentials reach the app; invalid credentials show an error state.",
+      "acceptance": [
+        "Sign-in form is visible at app URL when logged out",
+        "Valid manager or employee login navigates into the authenticated shell",
+        "Invalid credentials show a visible error (toast or inline), not a blank page"
+      ],
+      "effort_label": "medium",
+      "effort": 1,
+      "priority": 1,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "auth-signup-pending",
+      "title": "Auth — sign-up / pending approval",
+      "description": "Sign-up flow lands on pending-approval UI for new employees needing approval.",
+      "acceptance": [
+        "Sign-up tab/form is usable",
+        "Completing signup as a role that requires approval shows PendingApprovalScreen (or equivalent)",
+        "No uncaught UI crash during signup"
+      ],
+      "effort_label": "medium",
+      "effort": 1,
+      "priority": 2,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "manager-shell",
+      "title": "Manager shell",
+      "description": "Manager/admin landing view shows header, map, and Customers/Employees/Crews management chrome.",
+      "acceptance": [
+        "Header renders with role-appropriate controls",
+        "Map region is present (tiles or map container visible)",
+        "Customers / Employees / Crews views are reachable",
+        "No blank crash after login as manager"
+      ],
+      "effort_label": "medium",
+      "effort": 1,
+      "priority": 3,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "customer-crud-sheets",
+      "title": "Add / edit customer",
+      "description": "Customer add and edit sheets open, accept input, save, and reflect in list/map.",
+      "acceptance": [
+        "Add customer sheet opens from manager UI",
+        "Required fields can be filled and submitted",
+        "New or edited customer appears in the customer list (or map selection)",
+        "Sheet dismisses without trapping focus"
+      ],
+      "effort_label": "high",
+      "effort": 2,
+      "priority": 4,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "employee-crud-sheets",
+      "title": "Add / edit employee",
+      "description": "Employee add and edit sheets open, accept input, save, and reflect in the employee list.",
+      "acceptance": [
+        "Add employee sheet opens from manager UI",
+        "Employee can be created or edited and saved",
+        "Employee list updates after save",
+        "Sheet dismisses cleanly"
+      ],
+      "effort_label": "high",
+      "effort": 2,
+      "priority": 5,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "crew-sheet",
+      "title": "Crew sheet",
+      "description": "Create/edit crew and assign members via AddCrewSheet.",
+      "acceptance": [
+        "Crew create/edit sheet opens",
+        "Members can be selected/assigned",
+        "Save succeeds and crew appears in crews view",
+        "No stuck loading or silent failure"
+      ],
+      "effort_label": "high",
+      "effort": 2,
+      "priority": 6,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "route-display",
+      "title": "Route display",
+      "description": "Routes generate/display with map markers and crew popup interaction.",
+      "acceptance": [
+        "Route display area shows route content or empty state (not a crash)",
+        "Selecting a crew/route opens CrewPopup or equivalent detail",
+        "Map markers or route overlays render when routes exist"
+      ],
+      "effort_label": "high",
+      "effort": 2,
+      "priority": 7,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "employee-view",
+      "title": "Employee view",
+      "description": "Employee login shows EmployeeRouteView, not manager management chrome.",
+      "acceptance": [
+        "Signed-in employee sees employee route experience",
+        "Manager-only tabs/sheets (add customer/employee/crew) are not primary chrome",
+        "Assigned route/customer content loads or shows a clear empty state"
+      ],
+      "effort_label": "medium",
+      "effort": 1,
+      "priority": 8,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "profile-schedule-company",
+      "title": "Profile / schedule / company sheets",
+      "description": "Profile, schedule, and company sheets open, allow interaction, and dismiss.",
+      "acceptance": [
+        "Profile sheet opens and closes",
+        "Schedule sheet opens and closes",
+        "Company settings or company management opens for roles that have access",
+        "No focus trap preventing return to main UI"
+      ],
+      "effort_label": "medium",
+      "effort": 1,
+      "priority": 9,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "pending-users",
+      "title": "Pending users (manager)",
+      "description": "Manager pending-users sheet lists pending accounts; approve/reject if wired.",
+      "acceptance": [
+        "Manager can open PendingUsersSheet",
+        "Pending users list renders (or clear empty state)",
+        "If approve/reject controls exist, they are clickable and produce visible feedback"
+      ],
+      "effort_label": "medium",
+      "effort": 1,
+      "priority": 10,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "service-photos",
+      "title": "Service photos",
+      "description": "Photo capture/gallery UI opens; upload affordance works or fails with a clear error.",
+      "acceptance": [
+        "ServicePhotoManager (or photo capture/gallery) is reachable from a service/customer context",
+        "Capture or file picker affordance is present when canEdit",
+        "Gallery or empty state renders without crash"
+      ],
+      "effort_label": "high",
+      "effort": 2,
+      "priority": 11,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "mobile-layout",
+      "title": "Mobile swipe / layout",
+      "description": "At mobile viewport, manager navigation is usable without overflow/clipping that blocks core actions.",
+      "acceptance": [
+        "At 390x844, primary navigation or swipe between views works",
+        "Core CTAs (add/open sheets) remain reachable",
+        "No horizontal page overflow that hides the main map or list"
+      ],
+      "effort_label": "medium",
+      "effort": 1,
+      "priority": 12,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "sign-out",
+      "title": "Sign-out",
+      "description": "Sign-out returns to auth; authenticated content is no longer accessible.",
+      "acceptance": [
+        "Sign-out control is reachable from header/profile",
+        "After sign-out, AuthForm (or login) is shown",
+        "Refreshing does not restore the previous authenticated shell without credentials"
+      ],
+      "effort_label": "low",
+      "effort": 0,
+      "priority": 13,
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    }
+  ]
+}

@@ -44,3 +44,6 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+# Ralph local credentials
+docs/ralph/credentials.local.md
+.env.local

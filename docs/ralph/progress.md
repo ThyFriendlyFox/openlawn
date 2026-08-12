@@ -57,3 +57,10 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - `<promise>TASK-employee-crud-sheets:DONE</promise>`
 
 ### crew-sheet — starting
+
+### crew-sheet — PASS
+- Created Crew Black Widow-850 with Ralph Employee + push-mow; Crews (1)
+- Artifacts: `crew-sheet-open.png`, `crew-sheet-pass.png`
+- `<promise>TASK-crew-sheet:DONE</promise>`
+
+### route-display — starting

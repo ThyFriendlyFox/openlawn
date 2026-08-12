@@ -7,7 +7,7 @@ Append-only log. Newest entries at the bottom.
 - [x] Scaffolded `prd.json`, `PROMPT.md`, this file
 - [x] Dev server verified on `:9002` (emulators + Next)
 - [x] Test accounts seeded via `scripts/seed-ralph-emulators.js`
-- [ ] HITL dry-run: `auth-signin` + `manager-shell`
+- [x] HITL dry-run: `auth-signin` (continuing loop)
 
 Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pending@ralph.test` — password `password123`
 
@@ -17,3 +17,19 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - Emulators: auth:9099 firestore:8080 storage:9199
 - App: http://localhost:9002
 - Beginning computerUse for `auth-signin`
+
+### auth-signin — PASS
+- Form visible; invalid login shows inline error; manager login reaches shell with map + Customers (1) Acme Yard
+- Artifacts: `/opt/cursor/artifacts/ralph/auth-signin-*.png`, recording `auth-signin-ralph-loop.mp4`
+- `<promise>TASK-auth-signin:DONE</promise>`
+
+### auth-signup-pending — starting
+- Next: sign out, sign up as employee against company `Ralph Test Lawn Co`, expect PendingApprovalScreen
+
+### auth-signup-pending — PASS
+- Employee signup `newhire@ralph.test` → Account Pending Approval screen
+- Artifacts: `auth-signup-pending-form.png`, `auth-signup-pending-pass.png`
+- `<promise>TASK-auth-signup-pending:DONE</promise>`
+
+### manager-shell — starting
+- Sign in as manager; verify header, map, Customers/Employees/Crews reachability

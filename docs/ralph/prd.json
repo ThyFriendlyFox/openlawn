@@ -212,7 +212,7 @@
       "effort_label": "medium",
       "effort": 1,
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     },
@@ -228,7 +228,7 @@
       "effort_label": "low",
       "effort": 0,
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     }

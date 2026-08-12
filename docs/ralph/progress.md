@@ -101,3 +101,17 @@ Accounts (emulator only): `manager@ralph.test` / `employee@ralph.test` / `pendin
 - `<promise>TASK-service-photos:DONE</promise>`
 
 ### mobile-layout — starting
+
+### mobile-layout — PASS
+- iPhone SE viewport; map + customers; Add New Customer reachable; bottom nav present
+- Artifacts: `mobile-layout-pass.png`, `mobile-layout-views.png`
+- `<promise>TASK-mobile-layout:DONE</promise>`
+
+### sign-out — PASS
+- Avatar Sign out → AuthForm; refresh stays logged out
+- Artifacts: `sign-out-pass.png`, `sign-out-refresh.png`
+- `<promise>TASK-sign-out:DONE</promise>`
+
+## Loop complete
+All 13 scenarios `passes: true`, none blocked.
+`<promise>COMPLETE</promise>`

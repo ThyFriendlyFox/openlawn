@@ -27,7 +27,7 @@
         "Opening a route shows ordered stops"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     },
@@ -39,7 +39,7 @@
         "Assigned stops for today lists routed customers"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     },
@@ -51,7 +51,7 @@
         "Assigned customers or stop list includes seeded yards"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "blocked": false,
       "block_reason": null
     }

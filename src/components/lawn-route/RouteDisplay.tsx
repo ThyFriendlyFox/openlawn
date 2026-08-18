@@ -88,6 +88,37 @@ export function RouteDisplay({
   const [directionsResponses, setDirectionsResponses] = React.useState<google.maps.DirectionsResult[]>([])
   const [selectedRouteIndex, _setSelectedRouteIndex] = React.useState<number | null>(null)
 
+  React.useEffect(() => {
+    const map = mapRef.current
+    if (!isLoaded || !map) return
+
+    const points: { lat: number; lng: number }[] = []
+    customers.forEach((customer) => {
+      const lat = Number(customer.lat)
+      const lng = Number(customer.lng)
+      if (!isNaN(lat) && !isNaN(lng) && !(lat === 0 && lng === 0)) {
+        points.push({ lat, lng })
+      }
+    })
+    routes.forEach((route) => {
+      (route.optimizedPath || []).forEach((point) => {
+        const lat = Number(point.lat)
+        const lng = Number(point.lng)
+        if (!isNaN(lat) && !isNaN(lng)) points.push({ lat, lng })
+      })
+    })
+    if (baseLocation) {
+      const lat = Number(baseLocation.lat)
+      const lng = Number(baseLocation.lng)
+      if (!isNaN(lat) && !isNaN(lng)) points.push({ lat, lng })
+    }
+    if (points.length === 0) return
+
+    const bounds = new google.maps.LatLngBounds()
+    points.forEach((point) => bounds.extend(point))
+    map.fitBounds(bounds, 48)
+  }, [isLoaded, customers, routes, baseLocation])
+
   // Generate a color based on crewId
   const generateColor = (crewId: string): string => {
     let hash = 0;

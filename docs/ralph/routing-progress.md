@@ -7,7 +7,23 @@ Schedule UI showed personal hours only; auto-schedule view was never mounted.
 
 ## Iterations
 
-### route-data-ready — PASS
-- Seeded Lion-100 with weekday hours + 3 Austin yards (push-mow)
-- `verify-ralph-routes.js`: Tuesday, 3 stops (Acme, Beta, Cedar)
-- `<promise>TASK-route-data-ready:DONE</promise>`
+### manager-today-routes — PASS
+- Crews view: Today's routes (1) Crew Lion-100, Beta/Acme/Cedar, crew card "Today: 3 routed stops"
+- Artifacts: `manager-today-routes.png`, `manager-route-detail.png`
+- `<promise>TASK-manager-today-routes:DONE</promise>`
+
+### schedule-sheet-stops — PASS
+- Schedule Tue 18: 08:00–17:00; assigned stops Beta, Acme, Cedar
+- Artifact: `schedule-sheet-stops.png`
+- `<promise>TASK-schedule-sheet-stops:DONE</promise>`
+
+### employee-assigned-route — starting
+
+### employee-assigned-route — PASS
+- Employee view: Today's Schedule, 0/3 stops, Next Stop Beta Lawn, All Stops lists seeded yards
+- Artifacts: `employee-assigned-route.png`, `employee-schedule-stops.png`
+- `<promise>TASK-employee-assigned-route:DONE</promise>`
+
+## Loop complete
+All 4 routing/scheduling tasks pass.
+`<promise>COMPLETE</promise>`

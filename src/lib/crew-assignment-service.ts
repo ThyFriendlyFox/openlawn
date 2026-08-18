@@ -1,5 +1,6 @@
 import { updateDocument } from './firebase-services';
 import type { User } from './firebase-types';
+import { weekdaySchedule } from './route-matching';
 
 export interface CrewAssignment {
   crewId: string;
@@ -35,15 +36,7 @@ export const assignUserToCrew = async (
 
   // Set default schedule if user doesn't have one (8am-5pm, Monday-Friday)
   if (!currentUserData?.schedule) {
-    updates.schedule = {
-      monday: { start: '08:00', end: '17:00' },
-      tuesday: { start: '08:00', end: '17:00' },
-      wednesday: { start: '08:00', end: '17:00' },
-      thursday: { start: '08:00', end: '17:00' },
-      friday: { start: '08:00', end: '17:00' },
-      saturday: { start: '08:00', end: '17:00' },
-      sunday: { start: '08:00', end: '17:00' },
-    };
+    updates.schedule = weekdaySchedule(true);
   }
 
   await updateDocument('users', userId, updates);

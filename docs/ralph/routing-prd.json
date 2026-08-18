@@ -1,0 +1,59 @@
+{
+  "meta": {
+    "title": "OpenLawn routing + scheduling Ralph loop",
+    "scope": "Make daily route generation and schedule UI work with real crews/customers, proven on screen.",
+    "app_url": "http://localhost:9002",
+    "artifacts_dir": "/opt/cursor/artifacts/ralph-routing"
+  },
+  "tasks": [
+    {
+      "id": "route-data-ready",
+      "title": "Seeded crews/customers produce a route",
+      "acceptance": [
+        "scripts/verify-ralph-routes.js exits 0",
+        "At least one crew has weekday availability",
+        "At least one active customer matches that crew's service type today"
+      ],
+      "passes": true,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "manager-today-routes",
+      "title": "Manager sees today's routed stops",
+      "acceptance": [
+        "Crews view shows Today's routes with named customers",
+        "Crew card shows routed stop count > 0",
+        "Opening a route shows ordered stops"
+      ],
+      "priority": 2,
+      "passes": false,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "schedule-sheet-stops",
+      "title": "Schedule sheet lists assigned stops",
+      "acceptance": [
+        "Manager Schedule sheet shows working hours",
+        "Assigned stops for today lists routed customers"
+      ],
+      "priority": 3,
+      "passes": false,
+      "blocked": false,
+      "block_reason": null
+    },
+    {
+      "id": "employee-assigned-route",
+      "title": "Employee sees the crew route",
+      "acceptance": [
+        "employee@ralph.test lands on a route/stops experience (not empty manager chrome)",
+        "Assigned customers or stop list includes seeded yards"
+      ],
+      "priority": 4,
+      "passes": false,
+      "blocked": false,
+      "block_reason": null
+    }
+  ]
+}

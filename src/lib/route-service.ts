@@ -9,6 +9,12 @@ import type {
 import { getCustomers } from './customer-service';
 import { getUsers } from './user-service';
 import { getTSPOptimizationService } from './tsp-optimization-service';
+import {
+  crewCanServiceCustomer,
+  isUserAvailableOnDay,
+  customerNeedsServiceOnDate,
+  weekdayFromDate,
+} from './route-matching';
 
 // Route cache for daily routes
 const routeCache = new Map<string, DailyRoute>();
@@ -29,27 +35,26 @@ export const getAvailableCrews = async (companyId: string, date: Date): Promise<
   
   // Process all users with crew assignments
   users.forEach(user => {
-    // Check if user is available based on their schedule for the given date
-    const daySchedule = user.schedule?.[dayOfWeek];
+    const isAvailable = isUserAvailableOnDay(user, dayOfWeek);
     
-    // Consider user available if they have a schedule for this day with valid start/end times
-    const isAvailable = daySchedule && daySchedule.start && daySchedule.end;
-    
-    console.log(`User ${user.name} (${user.crewId}) - Schedule for ${dayOfWeek}:`, daySchedule, 'Available:', isAvailable);
+    console.log(`User ${user.name} (${user.crewId}) - Schedule for ${dayOfWeek}:`, user.schedule?.[dayOfWeek], 'Available:', isAvailable);
     
     if (user.crewId && isAvailable) {
       if (!crewMap.has(user.crewId)) {
         crewMap.set(user.crewId, {
           crewId: user.crewId,
-          crewServiceTypes: user.crewServiceTypes || ['general'],
+          crewServiceTypes: user.crewServiceTypes || [],
           employees: [],
           manager: undefined
         });
       }
       
       const crew = crewMap.get(user.crewId)!;
-      // Just add all users to the employees array regardless of role
       crew.employees.push(user);
+      if (user.crewServiceTypes?.length) {
+        const merged = new Set([...crew.crewServiceTypes, ...user.crewServiceTypes]);
+        crew.crewServiceTypes = Array.from(merged);
+      }
     }
   });
   
@@ -74,7 +79,7 @@ export const getAvailableCrews = async (companyId: string, date: Date): Promise<
             lng: effectiveManager.currentLocation.lng
           } : undefined,
         },
-        capabilities: crew.crewServiceTypes, // Crew can handle multiple service types
+        capabilities: crew.crewServiceTypes.length > 0 ? crew.crewServiceTypes : [],
         region: effectiveManager.region || 'default',
       };
     });
@@ -83,11 +88,7 @@ export const getAvailableCrews = async (companyId: string, date: Date): Promise<
   return availableCrews;
 };
 
-// Get day of week as string
-const getDayOfWeek = (date: Date): DayOfWeek => {
-  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  return days[date.getDay()] as DayOfWeek;
-};
+const getDayOfWeek = (date: Date): DayOfWeek => weekdayFromDate(date);
 
 // Geographic clustering by zip code
 export const clusterByZipCode = (customers: CustomerPriority[]): Map<string, CustomerPriority[]> => {
@@ -276,18 +277,9 @@ export const generateOptimalRoutes = async (companyId: string, date: Date): Prom
   const allCustomers = await getCustomers(companyId);
   const dayOfWeek = getDayOfWeek(date);
   
-  const customersWantingService = allCustomers.filter(customer => {
-    // Check if customer wants service on this day
-    const wantsServiceToday = customer.servicePreferences?.preferredDays?.includes(dayOfWeek) || false;
-    
-    // Check if customer needs service (not serviced in last 5 days)
-    const lastService = customer.lastServiceDate?.toDate();
-    const fiveDaysAgo = new Date(date);
-    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-    const needsService = !lastService || lastService < fiveDaysAgo;
-    
-    return customer.status === 'active' && wantsServiceToday && needsService;
-  });
+  const customersWantingService = allCustomers.filter(customer =>
+    customerNeedsServiceOnDate(customer, date)
+  );
   
   console.log(`Customers wanting service on ${dayOfWeek}:`, customersWantingService.length);
   
@@ -296,12 +288,9 @@ export const generateOptimalRoutes = async (companyId: string, date: Date): Prom
   
   for (const crew of availableCrews) {
     // Find customers this crew can service
-    const compatibleCustomers = customersWantingService.filter(customer => {
-      // Check if any of the customer's services match the crew's capabilities
-      return customer.services.some(service => 
-        crew.capabilities.includes(service.type)
-      );
-    });
+    const compatibleCustomers = customersWantingService.filter(customer =>
+      crewCanServiceCustomer(crew.capabilities, customer)
+    );
     
     console.log(`Crew ${crew.crewId} can service ${compatibleCustomers.length} customers`);
     console.log(`Crew ${crew.crewId} capabilities:`, crew.capabilities);

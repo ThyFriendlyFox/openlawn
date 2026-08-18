@@ -8,27 +8,19 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Calendar } from "lucide-react"
+import { Calendar, MapPin } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import type { DailyRoute } from "@/lib/firebase-types"
 
 interface ScheduleSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  routes?: DailyRoute[]
 }
 
-export function ScheduleSheet({ open, onOpenChange }: ScheduleSheetProps) {
+export function ScheduleSheet({ open, onOpenChange, routes = [] }: ScheduleSheetProps) {
   const { userProfile } = useAuth()
   const [selectedDate, setSelectedDate] = React.useState(new Date())
-
-  // Generate time slots (8 AM to 6 PM)
-  const timeSlots = React.useMemo(() => {
-    const slots = []
-    for (let hour = 8; hour <= 18; hour++) {
-      const time = `${hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`
-      slots.push(time)
-    }
-    return slots
-  }, [])
 
   // Get days of the week (Monday - Sunday)
   const getDaysOfWeek = () => {
@@ -121,62 +113,56 @@ export function ScheduleSheet({ open, onOpenChange }: ScheduleSheetProps) {
 
             {(() => {
               const daySchedule = getScheduleForDay(selectedDate)
-
-              if (!daySchedule) {
-                return (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No schedule set for this day</p>
-                  </div>
-                )
-              }
+              const dayRoutes = routes.filter((route) => {
+                const routeDate = route.date instanceof Date ? route.date : new Date(route.date)
+                return routeDate.toDateString() === selectedDate.toDateString()
+              })
+              const assignedStops = dayRoutes.flatMap((route) =>
+                route.customers.map((customer, index) => ({
+                  ...customer,
+                  stop: index + 1,
+                  crewId: route.crewId,
+                }))
+              )
 
               return (
-                <div className="space-y-2">
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Working Hours</p>
-                        <p className="text-lg font-semibold text-green-800">
-                          {daySchedule.start} - {daySchedule.end}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Status</p>
-                        <p className="text-sm font-medium text-green-800">Available</p>
+                <div className="space-y-4">
+                  {daySchedule ? (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Working Hours</p>
+                          <p className="text-lg font-semibold text-green-800">
+                            {daySchedule.start} - {daySchedule.end}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Status</p>
+                          <p className="text-sm font-medium text-green-800">Available</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No working hours set for this day</p>
+                  )}
 
-                  {/* Time slots visualization */}
-                  <div className="mt-4 space-y-1">
-                    <p className="text-sm text-muted-foreground mb-2">Schedule Timeline</p>
-                    {timeSlots.map((slot) => {
-                      const slotHour = parseInt(slot.split(':')[0])
-                      const isPM = slot.includes('PM')
-                      const hour24 = isPM && slotHour !== 12 ? slotHour + 12 : slotHour
-
-                      const startHour = parseInt(daySchedule.start.split(':')[0])
-                      const endHour = parseInt(daySchedule.end.split(':')[0])
-
-                      const isInSchedule = hour24 >= startHour && hour24 < endHour
-
-                      return (
-                        <div
-                          key={slot}
-                          className={`flex items-center gap-2 p-2 rounded ${
-                            isInSchedule
-                              ? 'bg-green-100 border-l-4 border-green-500'
-                              : 'bg-muted/30'
-                          }`}
-                        >
-                          <span className="text-sm font-medium w-24">{slot}</span>
-                          {isInSchedule && (
-                            <span className="text-xs text-green-700">Working</span>
-                          )}
-                        </div>
-                      )
-                    })}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">Assigned stops</h4>
+                    {assignedStops.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No customers routed for this day</p>
+                    ) : (
+                      <ol className="space-y-2">
+                        {assignedStops.map((stop) => (
+                          <li key={`${stop.crewId}-${stop.id}`} className="flex items-start gap-2 p-3 border rounded-lg">
+                            <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium">{stop.stop}. {stop.name}</p>
+                              <p className="text-xs text-muted-foreground">{stop.address}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
               )

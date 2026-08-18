@@ -20,6 +20,7 @@ import { ProfileSheet } from "@/components/lawn-route/ProfileSheet"
 import { ScheduleSheet } from "@/components/lawn-route/ScheduleSheet"
 import { CompanyManagementSheet } from "@/components/lawn-route/CompanyManagementSheet"
 import { PendingUsersSheet } from "@/components/lawn-route/PendingUsersSheet"
+import { TodaysRoutesPanel } from "@/components/lawn-route/TodaysRoutesPanel"
 import { PendingApprovalScreen } from "@/components/auth/PendingApprovalScreen"
 import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
 import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
@@ -489,7 +490,9 @@ export default function LawnRoutePage() {
         services: services,
         createdBy: userProfile?.id || '',
         servicePreferences: {
-          preferredDays: data.servicePreferences.preferredDays,
+          preferredDays: (data.servicePreferences?.preferredDays?.length
+            ? data.servicePreferences.preferredDays
+            : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']),
           preferredTimeRange: data.servicePreferences.preferredTimeRange,
           serviceFrequency: data.servicePreferences.serviceFrequency === 'weekly' ? 7 :
                           data.servicePreferences.serviceFrequency === 'biweekly' ? 14 :
@@ -549,7 +552,9 @@ export default function LawnRoutePage() {
         notes: data.notes || '',
         services: services,
         servicePreferences: {
-          preferredDays: data.servicePreferences.preferredDays,
+          preferredDays: (data.servicePreferences?.preferredDays?.length
+            ? data.servicePreferences.preferredDays
+            : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']),
           preferredTimeRange: data.servicePreferences.preferredTimeRange,
           serviceFrequency: data.servicePreferences.serviceFrequency === 'weekly' ? 7 : 
                           data.servicePreferences.serviceFrequency === 'biweekly' ? 14 : 
@@ -913,6 +918,11 @@ export default function LawnRoutePage() {
         </div>
         
         <div className="space-y-4 p-4">
+          <TodaysRoutesPanel
+            routes={routes}
+            onSelectRoute={handleRouteClick}
+          />
+
           {/* Add New Crew Card */}
           <div 
             onClick={() => setIsAddCrewSheetOpen(true)}
@@ -925,6 +935,7 @@ export default function LawnRoutePage() {
           {/* Crew information */}
           {crewsList.map((crew) => {
             const timing = getCrewTiming(crew.crewId);
+            const crewRoute = routes.find((route) => route.crewId === crew.crewId);
 
             return (
               <div
@@ -942,7 +953,10 @@ export default function LawnRoutePage() {
                       {crew.members.length} members
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Services: {crew.serviceTypes.join(', ')}
+                      Services: {crew.serviceTypes.join(', ') || 'none'}
+                    </p>
+                    <p className="text-sm mt-1">
+                      Today: {crewRoute?.customers.length || 0} routed stops
                     </p>
                     <div className="mt-2">
                       <p className="text-xs text-muted-foreground">Members:</p>
@@ -1175,6 +1189,7 @@ export default function LawnRoutePage() {
           <ScheduleSheet
             open={isScheduleSheetOpen}
             onOpenChange={setIsScheduleSheetOpen}
+            routes={routes}
           />
 
           {/* Company Management Sheet (Admin Only) */}
@@ -1267,6 +1282,7 @@ export default function LawnRoutePage() {
         <ScheduleSheet
           open={isScheduleSheetOpen}
           onOpenChange={setIsScheduleSheetOpen}
+          routes={routes}
         />
 
         {/* Company Settings Sheet (employee can view/update base location) */}

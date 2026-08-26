@@ -6,6 +6,7 @@ import {
   useJsApiLoader,
   Marker,
   DirectionsRenderer,
+  Polyline,
 } from '@react-google-maps/api'
 import type { Customer, User, DailyRoute } from '@/lib/firebase-types'
 import { Loader2, AlertTriangle } from 'lucide-react'
@@ -86,6 +87,37 @@ export function RouteDisplay({
   const mapRef = React.useRef<google.maps.Map | null>(null)
   const [directionsResponses, setDirectionsResponses] = React.useState<google.maps.DirectionsResult[]>([])
   const [selectedRouteIndex, _setSelectedRouteIndex] = React.useState<number | null>(null)
+
+  React.useEffect(() => {
+    const map = mapRef.current
+    if (!isLoaded || !map) return
+
+    const points: { lat: number; lng: number }[] = []
+    customers.forEach((customer) => {
+      const lat = Number(customer.lat)
+      const lng = Number(customer.lng)
+      if (!isNaN(lat) && !isNaN(lng) && !(lat === 0 && lng === 0)) {
+        points.push({ lat, lng })
+      }
+    })
+    routes.forEach((route) => {
+      (route.optimizedPath || []).forEach((point) => {
+        const lat = Number(point.lat)
+        const lng = Number(point.lng)
+        if (!isNaN(lat) && !isNaN(lng)) points.push({ lat, lng })
+      })
+    })
+    if (baseLocation) {
+      const lat = Number(baseLocation.lat)
+      const lng = Number(baseLocation.lng)
+      if (!isNaN(lat) && !isNaN(lng)) points.push({ lat, lng })
+    }
+    if (points.length === 0) return
+
+    const bounds = new google.maps.LatLngBounds()
+    points.forEach((point) => bounds.extend(point))
+    map.fitBounds(bounds, 48)
+  }, [isLoaded, customers, routes, baseLocation])
 
   // Generate a color based on crewId
   const generateColor = (crewId: string): string => {
@@ -338,6 +370,26 @@ export function RouteDisplay({
                 strokeWeight: isToday ? 4 : 2,
                 clickable: !isToday, // Only tomorrow routes are clickable
               },
+            }}
+          />
+        );
+      })}
+
+      {/* Fallback path when Directions API is unavailable */}
+      {directionsResponses.length === 0 && routes.map((route) => {
+        const path = (route.optimizedPath || [])
+          .map((point) => ({ lat: Number(point.lat), lng: Number(point.lng) }))
+          .filter((point) => !isNaN(point.lat) && !isNaN(point.lng));
+        if (path.length < 2) return null;
+        const isToday = isTodayRoute(route);
+        return (
+          <Polyline
+            key={`path-${route.crewId}`}
+            path={path}
+            options={{
+              strokeColor: generateColor(route.crewId),
+              strokeOpacity: isToday ? 0.8 : 0.35,
+              strokeWeight: isToday ? 4 : 2,
             }}
           />
         );

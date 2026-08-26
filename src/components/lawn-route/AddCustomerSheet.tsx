@@ -78,7 +78,7 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
       notes: "",
       serviceTypes: ["push-mow"],
       servicePreferences: {
-        preferredDays: [],
+        preferredDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
         preferredTimeRange: {
           start: "08:00",
           end: "17:00",
